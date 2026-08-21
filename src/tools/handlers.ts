@@ -7,6 +7,7 @@ import * as Q from "../superops/queries.js";
 import { auditErrorSummary, toClientSafeError } from "../privacy/errors.js";
 import { attachmentMetadata, sanitizeTicketText } from "../privacy/redact.js";
 import { sanitizeErrorText, sanitizeOutput } from "../privacy/safe-output.js";
+import { investigateTicket } from "../tickets/investigate-ticket.js";
 
 export interface ToolResult {
   content: Array<{ type: "text"; text: string }>;
@@ -43,7 +44,7 @@ export async function handleTool(
       case "rpmc_status":
         return jsonResult({
           product: "rpmc-superops-mcp",
-          version: "0.1.2",
+          version: "0.1.3",
           phase: 1,
           readonly: true,
           writesRegistered: false,
@@ -165,6 +166,9 @@ export async function handleTool(
       }
       case "superops_technicians_groups": {
         return jsonResult(await client.query(Q.GET_TECHNICIAN_GROUP_LIST));
+      }
+      case "investigate_ticket": {
+        return jsonResult(await investigateTicket(args, client));
       }
       default:
         return errorResult(`Unknown or unregistered tool: ${name}`);

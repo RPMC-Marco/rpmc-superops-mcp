@@ -15,7 +15,7 @@ export function listMcpTools() {
 }
 
 export function createMcpServer(config: AppConfig, client: SuperOpsClient): McpServer {
-  const server = new McpServer({ name: "rpmc-superops-mcp", version: "0.1.2" });
+  const server = new McpServer({ name: "rpmc-superops-mcp", version: "0.1.3" });
 
   for (const capability of registeredCapabilities()) {
     server.registerTool(

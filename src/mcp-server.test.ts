@@ -64,6 +64,16 @@ describe("mcp server tools/list", () => {
     const ticketsList = listMcpTools().find((tool) => tool.name === "superops_tickets_list");
     expect(JSON.stringify(ticketsList?.inputSchema)).not.toMatch(/status/);
   });
+
+  it("registers investigate_ticket with ticket and optional assetId only", () => {
+    const tool = listMcpTools().find((item) => item.name === "investigate_ticket");
+    expect(tool).toBeDefined();
+    const schema = JSON.stringify(tool?.inputSchema);
+    expect(schema).toMatch(/ticket/);
+    expect(schema).toMatch(/assetId/);
+    expect(schema).not.toMatch(/status/);
+    expect(schema).not.toMatch(/createdTime/);
+  });
 });
 
 describe("handlers", () => {
@@ -106,6 +116,63 @@ describe("handlers", () => {
     await handleTool("superops_tickets_list", { status: "Open" }, client, config);
     expect(body).not.toMatch(/"condition"/);
     expect(body).not.toMatch(/"status":"Open"/);
+  });
+
+  it("lets investigate_ticket send a displayId condition without paging the tenant", async () => {
+    const bodies: string[] = [];
+    const config = loadConfig(stdioEnv);
+    const client = new SuperOpsClient(
+      { apiToken: "t", subdomain: "d", region: "us" },
+      {
+        requestTimeoutMs: 1000,
+        maxReadRetries: 1,
+        maxRetryDurationMs: 1000,
+        fetchImpl: async (_url, init) => {
+          const body = String(init?.body ?? "");
+          bodies.push(body);
+          if (body.includes("getTicketList")) {
+            return new Response(
+              JSON.stringify({
+                data: {
+                  getTicketList: {
+                    tickets: [{ ticketId: "t1", displayId: "200826-0001" }],
+                    listInfo: { page: 1, pageSize: 5, hasMore: false, totalCount: 1 },
+                  },
+                },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } }
+            );
+          }
+          if (body.includes("query getTicket(")) {
+            return new Response(
+              JSON.stringify({ data: { getTicket: { ticketId: "t1", displayId: "200826-0001" } } }),
+              { status: 200, headers: { "Content-Type": "application/json" } }
+            );
+          }
+          if (body.includes("getTicketConversationList")) {
+            return new Response(JSON.stringify({ data: { getTicketConversationList: [] } }), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          if (body.includes("getTicketNoteList")) {
+            return new Response(JSON.stringify({ data: { getTicketNoteList: [] } }), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          throw new Error(body.slice(0, 80));
+        },
+      }
+    );
+    const result = await handleTool("investigate_ticket", { ticket: "200826-0001" }, client, config);
+    const payload = JSON.parse(result.content[0]?.text ?? "{}") as { status: string };
+    expect(result.isError).toBeFalsy();
+    expect(payload.status).toBe("complete");
+    expect(bodies.some((item) => item.includes('"operator":"is"') && item.includes("displayId"))).toBe(true);
+    expect(bodies.filter((item) => item.includes("getTicketList"))).toHaveLength(1);
+    expect(bodies.some((item) => item.includes('"attribute":"createdTime"'))).toBe(false);
+    expect(bodies.some((item) => /"page":\s*2/.test(item))).toBe(false);
   });
 
   it("flattens superops_tickets_get to ticket fields", async () => {

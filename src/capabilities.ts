@@ -88,6 +88,18 @@ export const CAPABILITIES: Capability[] = [
     inputSchema: z.object({ ticketId: z.string() }),
   },
   {
+    name: "investigate_ticket",
+    description:
+      "Gather a bounded, sanitized read-only evidence package for one ticket. Accepts an RPMC displayId (DDMMYY-NNNN) or a SuperOps ticketId. Optional explicit assetId only; ticket-to-asset linkage is never inferred. Does not diagnose.",
+    classification: "read",
+    operationKind: "query",
+    phase1Registered: true,
+    inputSchema: z.object({
+      ticket: z.string(),
+      assetId: z.string().optional(),
+    }),
+  },
+  {
     name: "superops_assets_list",
     description: "List SuperOps assets/endpoints.",
     classification: "read",

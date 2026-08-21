@@ -6,7 +6,7 @@ describe("capability registry", () => {
     const registered = registeredToolNames();
     expect(registered).toContain("rpmc_status");
     expect(registered).toContain("superops_tickets_get");
-    expect(registered).toContain("superops_tickets_conversations");
+    expect(registered).toContain("investigate_ticket");
     expect(new Set(registered).size).toBe(registered.length);
   });
 

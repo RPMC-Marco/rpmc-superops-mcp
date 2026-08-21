@@ -21,6 +21,7 @@ describe("graphql contracts", () => {
 
   it("does not query Ticket.description", () => {
     expect(GET_TICKET).not.toMatch(/\bdescription\b/);
+    expect(GET_TICKET_LIST).not.toMatch(/\bdescription\b/);
   });
 
   it("uses official getTechnicianList.userList", () => {
