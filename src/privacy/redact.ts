@@ -63,7 +63,11 @@ export function sanitizeTicketText(value: unknown, maxChars = 4000): RedactionRe
   };
 }
 
-export function attachmentMetadata(value: unknown): Array<{ fileName?: string; originalFileName?: string; fileSize?: number }> {
+export function attachmentMetadata(value: unknown): Array<{
+  fileName?: string;
+  originalFileName?: string;
+  fileSize?: number;
+}> {
   if (!Array.isArray(value)) return [];
   return value.map((item) => {
     const rec = item && typeof item === "object" ? (item as Record<string, unknown>) : {};

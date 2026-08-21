@@ -9,9 +9,13 @@ Phase 1: authenticated, read-only, Docker on QNAP (LAN). Write tools are not reg
 ## Runtime
 
 - Node.js 24
+- MCP TypeScript SDK v2 (`@modelcontextprotocol/server` + `@modelcontextprotocol/node`)
 - stdio (desktop MCP clients) or Streamable HTTP (QNAP)
 - SuperOps credentials only from container/process environment
-- MCP callers must send `Authorization: Bearer <MCP_AUTH_TOKEN>` on HTTP
+- HTTP MCP callers must send `Authorization: Bearer <MCP_AUTH_TOKEN>` (`MCP_AUTH_TOKEN` ≥ 32 characters)
+- stdio does not require `MCP_AUTH_TOKEN`
+
+See [docs/MCP-SDK.md](docs/MCP-SDK.md) for Origin policy and the v2 decision.
 
 ## Quick start (development)
 
@@ -38,6 +42,8 @@ Accept: application/json, text/event-stream
 
 HTTP is stateless (fresh MCP server per request) so it works behind a future Cloudflare Access/Tunnel hop without sticky sessions. `/health` is unauthenticated for Docker HEALTHCHECK and does not expose tokens or ticket content.
 
+If a browser client will send `Origin`, set `MCP_ALLOWED_ORIGINS` to that hostname. Non-browser clients that omit `Origin` continue to work.
+
 ## Docker
 
 ```bash
@@ -47,9 +53,11 @@ docker run --rm -p 127.0.0.1:8080:8080 --env-file /secure/path/.env rpmc-superop
 
 See `docker-compose.sample.yml`. Production compose stays on QNAP and is not committed.
 
+CI builds the image on every push (no registry publish). Local/QNAP image smoke-test is still required on a machine with Docker.
+
 ## Privacy
 
-Ticket conversations and notes are sanitized by default: HTML stripped, high-confidence secrets redacted, attachments metadata-only. Redaction is marked in the result. The LLM should diagnose; this server gathers and gates data.
+Tool JSON payloads run through a conservative safe-output pass: high-confidence secrets in freeform strings are replaced with `[redacted]` and marked via `_privacy` when anything changed. Conversation/note `content` is also HTML-stripped. Attachments stay metadata-only. Useful technical evidence is kept. This is not DLP.
 
 ## License
 

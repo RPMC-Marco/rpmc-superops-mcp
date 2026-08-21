@@ -1,6 +1,7 @@
 # Write capabilities
 
 Phase 1 does **not** register write tools. `tools/list` is generated from `src/capabilities.ts`.
+Each capability has `operationKind` (`query` / `mutation` / `local`) in addition to risk `classification`. Mutation-kind rows are never registered, even if someone later labels them `read`.
 If a row here says `registered: no` and the code still exposes it, that is a bug.
 
 Emergency disable for the whole MCP HTTP listener: stop the container, or unset `MCP_AUTH_TOKEN` (process refuses to start in HTTP mode). SuperOps token remaining in the container env cannot be used by MCP callers.

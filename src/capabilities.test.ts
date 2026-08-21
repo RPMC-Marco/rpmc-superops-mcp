@@ -24,4 +24,10 @@ describe("capability registry", () => {
     expect(registered.has("superops_tickets_add_note")).toBe(false);
     expect(registered.has("superops_alerts_resolve")).toBe(false);
   });
+
+  it("never registers mutation-kind operations even if a read label were set", () => {
+    const registered = new Set(registeredToolNames());
+    expect(registered.has("superops_custom_mutation")).toBe(false);
+    expect(unregisteredWriteNames()).toContain("superops_custom_mutation");
+  });
 });

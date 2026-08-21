@@ -3,6 +3,7 @@ import type { SuperOpsClient } from "../superops/client.js";
 import { clampPageSize } from "../superops/limiter.js";
 import * as Q from "../superops/queries.js";
 import { attachmentMetadata, sanitizeTicketText } from "../privacy/redact.js";
+import { sanitizeOutput } from "../privacy/safe-output.js";
 
 export interface ToolResult {
   content: Array<{ type: "text"; text: string }>;
@@ -10,7 +11,8 @@ export interface ToolResult {
 }
 
 export function jsonResult(payload: unknown): ToolResult {
-  return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
+  const sanitized = sanitizeOutput(payload);
+  return { content: [{ type: "text", text: JSON.stringify(sanitized.payload, null, 2) }] };
 }
 
 export function errorResult(message: string): ToolResult {
@@ -37,7 +39,7 @@ export async function handleTool(
       case "rpmc_status":
         return jsonResult({
           product: "rpmc-superops-mcp",
-          version: "0.1.0",
+          version: "0.1.1",
           phase: 1,
           readonly: true,
           writesRegistered: false,
@@ -50,22 +52,15 @@ export async function handleTool(
         return jsonResult({ ok: true, region: config.superopsRegion });
       }
       case "superops_clients_list": {
-        const data = await client.query(Q.GET_CLIENT_LIST, { input: pageInput(args) });
-        return jsonResult(data);
+        return jsonResult(await client.query(Q.GET_CLIENT_LIST, { input: pageInput(args) }));
       }
       case "superops_clients_get": {
         const accountId = String(args.accountId ?? "");
         if (!accountId) return errorResult("accountId is required");
-        const data = await client.query(Q.GET_CLIENT, { input: { accountId } });
-        return jsonResult(data);
+        return jsonResult(await client.query(Q.GET_CLIENT, { input: { accountId } }));
       }
       case "superops_tickets_list": {
-        const input: Record<string, unknown> = pageInput(args);
-        if (typeof args.status === "string" && args.status.trim()) {
-          input.condition = { attribute: "status", operator: "is", value: args.status.trim() };
-        }
-        const data = await client.query(Q.GET_TICKET_LIST, { input });
-        return jsonResult(data);
+        return jsonResult(await client.query(Q.GET_TICKET_LIST, { input: pageInput(args) }));
       }
       case "superops_tickets_get": {
         const ticketId = String(args.ticketId ?? "");
@@ -167,7 +162,7 @@ export async function handleTool(
         return errorResult(`Unknown or unregistered tool: ${name}`);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error ? error.message : "tool failed";
     return errorResult(message);
   }
 }

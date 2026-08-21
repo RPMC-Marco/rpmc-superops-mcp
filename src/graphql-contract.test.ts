@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ALL_QUERY_DOCUMENTS, GET_TICKET, GET_TICKET_LIST } from "./superops/queries.js";
+import { ALL_QUERY_DOCUMENTS, GET_TECHNICIAN_LIST, GET_TICKET, GET_TICKET_LIST } from "./superops/queries.js";
 
 const NESTED_ASSOCIATION = /\b(client|site|requester|technician|techGroup|sla|asset)\s*\{/;
 
@@ -21,5 +21,9 @@ describe("graphql contracts", () => {
 
   it("does not query Ticket.description", () => {
     expect(GET_TICKET).not.toMatch(/\bdescription\b/);
+  });
+
+  it("uses official getTechnicianList.userList", () => {
+    expect(GET_TECHNICIAN_LIST).toMatch(/\buserList\b/);
   });
 });

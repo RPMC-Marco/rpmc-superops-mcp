@@ -1,18 +1,15 @@
 #!/usr/bin/env node
 import { createServer } from "node:http";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { loadConfig } from "./config.js";
-import { authorizeMcpRequest } from "./auth.js";
 import { clientFromConfig } from "./superops/client.js";
 import { createMcpServer } from "./mcp/server.js";
+import { handleMcpHttpRequest } from "./http/mcp-http.js";
 
-async function startStdio(): Promise<void> {
+function startStdio(): void {
   const config = loadConfig();
   const client = clientFromConfig(config);
-  const server = createMcpServer(config, client);
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  serveStdio(() => createMcpServer(config, client));
   console.error("rpmc-superops-mcp running on stdio (Phase 1 read-only)");
 }
 
@@ -20,42 +17,40 @@ async function startHttp(): Promise<void> {
   const config = loadConfig();
   const client = clientFromConfig(config);
 
-  const httpServer = createServer(async (req, res) => {
-    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+  const httpServer = createServer((req, res) => {
+    void (async () => {
+      try {
+        const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
-    if (url.pathname === "/health") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(
-        JSON.stringify({
-          status: "ok",
-          product: "rpmc-superops-mcp",
-          readonly: true,
-          auth: "required",
-        })
-      );
-      return;
-    }
+        if (url.pathname === "/health") {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              status: "ok",
+              product: "rpmc-superops-mcp",
+              readonly: true,
+              auth: "required",
+            })
+          );
+          return;
+        }
 
-    if (url.pathname === "/mcp") {
-      if (!authorizeMcpRequest(req.headers, config.mcpAuthToken)) {
-        res.writeHead(401, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "unauthorized" }));
-        return;
+        if (url.pathname === "/mcp") {
+          await handleMcpHttpRequest(req, res, config, client);
+          return;
+        }
+
+        if (!res.headersSent) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "not found", endpoints: ["/mcp", "/health"] }));
+        }
+      } catch {
+        if (!res.headersSent) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "request failed" }));
+        }
       }
-
-      const server = createMcpServer(config, client);
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-        enableJsonResponse: true,
-      });
-      await server.connect(transport);
-      await transport.handleRequest(req, res);
-      await server.close();
-      return;
-    }
-
-    res.writeHead(404, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "not found", endpoints: ["/mcp", "/health"] }));
+    })();
   });
 
   await new Promise<void>((resolve) => {
@@ -77,7 +72,7 @@ async function main(): Promise<void> {
   if (config.transport === "http") {
     await startHttp();
   } else {
-    await startStdio();
+    startStdio();
   }
 }
 

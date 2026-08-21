@@ -17,6 +17,6 @@ Classification used in this repository:
 | `src/mcp/server.ts`, `src/index.ts` | WYRE `src/mcp-server.ts` / `src/index.ts` @ d3f900c | Design inspiration + new | Factory + per-request HTTP server. Required Bearer MCP auth. No SuperOps tokens from client headers. |
 | `src/config.ts` `cleanCredential` | WYRE `src/client.ts` @ d3f900c | Substantially adapted | Placeholder stripping. |
 | Docker | WYRE/Computask Dockerfiles | Design inspiration | Node 24, no GitHub Packages, non-root. |
-| Capability registry, caller auth, write omission | RPMC | Independently implemented | Phase 1 does not register write tools. |
+| Capability registry, caller auth, write omission, Origin policy, safe-output walk | RPMC | Independently implemented | Phase 1 does not register write or mutation-kind tools. |
 
 Servosity/msp-skills was **not** copied. It informed live-API notes in `docs/SUPEROPS-API-NOTES.md`.

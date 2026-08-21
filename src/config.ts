@@ -1,4 +1,13 @@
+/**
+ * RPMC process configuration.
+ *
+ * `cleanCredential` is substantially adapted from wyre-technology/superops-mcp
+ * `src/client.ts` (Apache-2.0, commit d3f900ca81506b1d62a027d2b0222be05d240415):
+ * placeholder / empty-string stripping for environment credentials.
+ */
+
 const CONFIG_PLACEHOLDER = /^\$\{.*\}$/;
+export const HTTP_AUTH_TOKEN_MIN_LENGTH = 32;
 
 export function cleanCredential(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
@@ -13,7 +22,8 @@ export interface AppConfig {
   transport: Transport;
   httpHost: string;
   httpPort: number;
-  mcpAuthToken: string;
+  mcpAuthToken?: string;
+  allowedOriginHostnames: string[];
   superopsApiToken: string;
   superopsSubdomain: string;
   superopsRegion: SuperOpsRegion;
@@ -48,13 +58,38 @@ function parsePositiveInt(name: string, value: string | undefined, fallback: num
   return parsed;
 }
 
+function parseOriginAllowlist(raw: string | undefined): string[] {
+  if (!raw?.trim()) return [];
+  return raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((value) => {
+      try {
+        const url = value.includes("://") ? new URL(value) : new URL(`http://${value}`);
+        return url.hostname;
+      } catch {
+        throw new Error(`MCP_ALLOWED_ORIGINS contains an invalid origin: ${value}`);
+      }
+    });
+}
+
 export function loadConfig(env: Record<string, string | undefined> = process.env): AppConfig {
   const transport = (cleanCredential(env.MCP_TRANSPORT) ?? "stdio") as string;
   if (transport !== "stdio" && transport !== "http") {
     throw new Error("MCP_TRANSPORT must be stdio or http");
   }
 
-  const mcpAuthToken = requireCredential("MCP_AUTH_TOKEN", env.MCP_AUTH_TOKEN);
+  let mcpAuthToken: string | undefined;
+  if (transport === "http") {
+    mcpAuthToken = requireCredential("MCP_AUTH_TOKEN", env.MCP_AUTH_TOKEN);
+    if (mcpAuthToken.length < HTTP_AUTH_TOKEN_MIN_LENGTH) {
+      throw new Error(`MCP_AUTH_TOKEN must be at least ${HTTP_AUTH_TOKEN_MIN_LENGTH} characters`);
+    }
+  } else {
+    mcpAuthToken = cleanCredential(env.MCP_AUTH_TOKEN);
+  }
+
   const superopsApiToken = requireCredential("SUPEROPS_API_TOKEN", env.SUPEROPS_API_TOKEN);
   const superopsSubdomain = requireCredential("SUPEROPS_SUBDOMAIN", env.SUPEROPS_SUBDOMAIN);
 
@@ -63,6 +98,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     httpHost: cleanCredential(env.MCP_HTTP_HOST) ?? "0.0.0.0",
     httpPort: parsePositiveInt("MCP_HTTP_PORT", env.MCP_HTTP_PORT, 8080),
     mcpAuthToken,
+    allowedOriginHostnames: parseOriginAllowlist(env.MCP_ALLOWED_ORIGINS),
     superopsApiToken,
     superopsSubdomain,
     superopsRegion: parseRegion(env.SUPEROPS_REGION),

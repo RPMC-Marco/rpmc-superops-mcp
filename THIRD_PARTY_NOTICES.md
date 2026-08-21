@@ -10,7 +10,7 @@ It is not legal advice.
 - License: Apache-2.0
 - Repository: https://github.com/computask/superops-mcp
 - Reference commit: 85b24ee9f203637b680858cd0abdd1bf5d303f9e
-- Original copyright: Wyre Technology (Computask's package.json / LICENSE still identify the WYRE lineage)
+- Computask retains WYRE-derived lineage/metadata (Computask's package.json / LICENSE still identify the WYRE lineage)
 
 Adapted into RPMC (see docs/PROVENANCE.md):
 
@@ -44,4 +44,4 @@ RPMC did not copy generated Go source. Servosity was used as live-API intelligen
 
 ## Independently implemented
 
-RPMC-authored code implements the public SuperOps MSP GraphQL API and the Model Context Protocol using the official MCP SDK. Similarity to other SuperOps clients that call the same public operations is expected.
+RPMC-authored code implements the public SuperOps MSP GraphQL API and the Model Context Protocol using the official MCP TypeScript SDK v2. Similarity to other SuperOps clients that call the same public operations is expected.
