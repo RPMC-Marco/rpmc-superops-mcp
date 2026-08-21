@@ -65,7 +65,7 @@ Full read-surface live validation against QNAP 0.1.6: **PASS WITH CORRECTIONS**.
 - **Unsupported:** `getAssetList` `lastCommunicatedTime` sort; `getUnMonitoredAssetList`
 - JSON-scalar `site.client.accountId` arrived as an unquoted JSON number and lost precision under `JSON.parse` (corrected in 0.1.7 at the parse boundary)
 
-0.1.7 is the correction release for those findings. It is not yet the QNAP baseline until a later targeted deploy.
+0.1.7 is the current QNAP baseline (commit `23229825460e5b88c306c6cf0b0c3dcc080958cb`). 0.1.8 is the undeployed Phase 1 read-expansion candidate.
 
 ### `investigate_ticket` (RPMC LIVE-CONFIRMED, 2026-08-20 / 0.1.3)
 
@@ -155,7 +155,7 @@ Constrained ticket/asset/alert search tools never walk additional pages. Rejecte
 
 Aggregators omit structured `email` keys. Primitive `superops_alerts_list` also omits `asset.owner.email` (0.1.7). Freeform `message`/`description` and ticket bodies are not general-purpose email redaction.
 
-See `docs/READ-SURFACE.md` and `docs/LIVE-CONFIRMATION-MATRIX.md`.
+See `docs/READ-SURFACE.md` and `docs/OFFICIAL-READ-INVENTORY.md`.
 
 ### Audit logs
 
@@ -166,4 +166,8 @@ MCP stderr audit lines are JSON `mcp.tool_call` records.
 - Aggregator failed/partial investigations are `success: false` even when the MCP handler returns structured JSON (`isError` is false)
 - Primitive reads without an investigation payload: `success` follows `!isError`, `outcome` is `complete` or `failed`
 
-Audit metadata is a whitelist (resolution method, section state, truncation, logical operations, safe upstream category). It must not include ticket/alert bodies, subjects, requester/customer names, emails, IP addresses, tokens, or raw SuperOps bodies.
+Audit metadata is a whitelist (resolution method, section state, truncation, logical operations, safe upstream category). It must not include ticket/alert bodies, subjects, requester/customer names, emails, IP addresses, tokens, invoice line descriptions, KB/document bodies, or raw SuperOps bodies.
+
+### 0.1.8 Phase 1 read expansion
+
+44 additional official reads are implemented as explicit domain MCP tools. Full accounting: `docs/OFFICIAL-READ-INVENTORY.md`. They are **not** live-confirmed. IT documentation GraphQL type has no body field. KB article HTML is a separate SuperOps download API, not fetched. Worklogs require official `module` (TICKET|PROJECT). Scripts are list-only. Writes remain unregistered.

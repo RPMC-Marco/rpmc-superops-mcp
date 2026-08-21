@@ -16,6 +16,7 @@ import { getSite, listSites, searchSites } from "../search/sites.js";
 import { searchTickets } from "../search/tickets-search.js";
 import { investigateTicket } from "../tickets/investigate-ticket.js";
 import { omitStructuredEmail } from "../investigate/common.js";
+import { handleExpandedRead } from "../reads/expanded.js";
 import type { ToolOutcome } from "../audit.js";
 
 export interface ToolResult {
@@ -58,7 +59,7 @@ export async function handleTool(
       case "rpmc_status":
         return jsonResult({
           product: "rpmc-superops-mcp",
-          version: "0.1.7",
+          version: "0.1.8",
           phase: 1,
           readonly: true,
           writesRegistered: false,
@@ -219,8 +220,11 @@ export async function handleTool(
         const payload = await searchSites(args, client);
         return jsonResult(payload, investigationAuditFromResult(payload));
       }
-      default:
+      default: {
+        const expanded = await handleExpandedRead(name, args, client);
+        if (expanded) return jsonResult(expanded, investigationAuditFromResult(expanded));
         return errorResult(`Unknown or unregistered tool: ${name}`);
+      }
     }
   } catch (error) {
     const clientMessage = toClientSafeError(error);

@@ -11,7 +11,7 @@ export interface SanitizedOutput {
   privacy: PrivacyNotice;
 }
 
-const RICH_TEXT_KEYS = new Set(["content"]);
+const RICH_TEXT_KEYS = new Set(["content", "description", "notes", "readMe", "details"]);
 export const MAX_OUTPUT_DEPTH = 12;
 const MAX_STRING = 8000;
 export const DEPTH_OMITTED = "[omitted: max depth]";

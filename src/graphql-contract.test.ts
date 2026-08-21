@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { ALL_QUERY_DOCUMENTS, GET_ALERTS_FOR_ASSET, GET_TECHNICIAN_LIST, GET_TICKET, GET_TICKET_LIST } from "./superops/queries.js";
+import { ALL_QUERY_DOCUMENTS, GET_ALERTS_FOR_ASSET, GET_TECHNICIAN_LIST, GET_TICKET, GET_TICKET_LIST, GET_UNMONITORED_ASSET_LIST } from "./superops/queries.js";
+import { EXPANDED_QUERY_DOCUMENTS, OBJECT_TYPED_QUERY_DOCUMENTS } from "./superops/queries-expanded.js";
 
 const NESTED_ASSOCIATION = /\b(client|site|requester|technician|techGroup|sla|asset)\s*\{/;
 
 describe("graphql contracts", () => {
-  it("does not nest SuperOps association fields", () => {
+  it("does not nest SuperOps JSON association fields on the original 0.1.7 documents", () => {
     for (const document of ALL_QUERY_DOCUMENTS) {
       expect(document, document.slice(0, 80)).not.toMatch(NESTED_ASSOCIATION);
     }
@@ -32,5 +33,83 @@ describe("graphql contracts", () => {
     expect(GET_ALERTS_FOR_ASSET).toMatch(/getAlertsForAsset/);
     expect(GET_ALERTS_FOR_ASSET).toMatch(/AssetDetailsListInput/);
     expect(GET_ALERTS_FOR_ASSET).not.toMatch(/getAlertList/);
+  });
+
+  it("does not expose getAssetInfoByTPEndpointIds or deprecated field-list replacements", () => {
+    const blob = EXPANDED_QUERY_DOCUMENTS.join("\n");
+    expect(blob).not.toMatch(/getAssetInfoByTPEndpointIds/);
+    expect(blob).not.toMatch(/getStatusList/);
+    expect(blob).not.toMatch(/getPriorityList/);
+    expect(blob).not.toMatch(/getCategoryList/);
+    expect(blob).not.toMatch(/getAssetPatchStatus/);
+    expect(blob).not.toMatch(/getTicketCustomField/);
+    expect(blob).not.toMatch(/getClientCustomField/);
+  });
+
+  it("keeps getUnMonitoredAssetList as an unused document, not an expanded tool query", () => {
+    expect(GET_UNMONITORED_ASSET_LIST).toMatch(/getUnMonitoredAssetList/);
+    expect(EXPANDED_QUERY_DOCUMENTS.join("\n")).not.toMatch(/getUnMonitoredAssetList/);
+  });
+
+  it("nests only official object-typed fields on the expansion documents that require it", () => {
+    const jsonLeafDocs = EXPANDED_QUERY_DOCUMENTS.filter((document) => !OBJECT_TYPED_QUERY_DOCUMENTS.includes(document));
+    for (const document of jsonLeafDocs) {
+      expect(document, document.slice(0, 80)).not.toMatch(NESTED_ASSOCIATION);
+    }
+    expect(OBJECT_TYPED_QUERY_DOCUMENTS.join("\n")).toMatch(/client \{ accountId name \}/);
+  });
+
+  it("covers all 44 approved expansion queries", () => {
+    const blob = EXPANDED_QUERY_DOCUMENTS.join("\n");
+    const required = [
+      "getAllFields",
+      "getField(",
+      "getFields(",
+      "getAssetCustomFields",
+      "getAssetDiskDetails",
+      "getAssetUserLog",
+      "getDeviceCategories",
+      "getClientStageList",
+      "getClientUser(",
+      "getClientUserList",
+      "getClientUserAssociationList",
+      "getRequesterRoleList",
+      "getTechnicianRoleList",
+      "getDesignationList",
+      "getTeamList",
+      "getBusinessFunctionList",
+      "getClientContract(",
+      "getClientContractList",
+      "getSLAList",
+      "getOfferedItems",
+      "getServiceCatalogItem(",
+      "getServiceCatalogItemList",
+      "getServiceCategoryList",
+      "getServiceItem(",
+      "getServiceItemList",
+      "getTax(",
+      "getTaxList",
+      "getPaymentMethodList",
+      "getPaymentTermList",
+      "getInvoice(",
+      "getInvoiceList",
+      "getInvoiceItemList",
+      "getItDocumentation(",
+      "getItDocumentationList",
+      "getItDocumentationCategories",
+      "getKbItem(",
+      "getKbItems(",
+      "getScriptList(",
+      "getScriptListByType",
+      "getTask(",
+      "getTaskList",
+      "getWorkStatusList",
+      "getWorklogEntries",
+      "getHolidayList",
+    ];
+    for (const name of required) {
+      expect(blob, name).toContain(name);
+    }
+    expect(required).toHaveLength(44);
   });
 });

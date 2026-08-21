@@ -4,7 +4,7 @@ Standalone SuperOps MCP server for RPM Computers (RPMC).
 
 This is **not** a fork of WYRE, Computask, or Servosity. Those projects are implementation donors and live-API references. See [docs/PROVENANCE.md](docs/PROVENANCE.md).
 
-Phase 1: authenticated, read-only, Docker on QNAP (LAN). Write tools are not registered and do not appear in `tools/list`. Constrained search and investigation tools are documented in [docs/READ-SURFACE.md](docs/READ-SURFACE.md). The next staging pass should follow [docs/LIVE-CONFIRMATION-MATRIX.md](docs/LIVE-CONFIRMATION-MATRIX.md). After a QNAP image with a new tool surface, fully reconnect the Cursor MCP client.
+Phase 1: authenticated, read-only, Docker on QNAP (LAN). Write tools are not registered and do not appear in `tools/list`. Constrained search and investigation tools are documented in [docs/READ-SURFACE.md](docs/READ-SURFACE.md). Complete official `get*` accounting is in [docs/OFFICIAL-READ-INVENTORY.md](docs/OFFICIAL-READ-INVENTORY.md). The next staging pass should follow [docs/LIVE-CONFIRMATION-MATRIX.md](docs/LIVE-CONFIRMATION-MATRIX.md). After a QNAP image with a new tool surface, fully reconnect the Cursor MCP client.
 
 ## Runtime
 

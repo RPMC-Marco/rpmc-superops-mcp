@@ -1,0 +1,251 @@
+import { describe, expect, it } from "vitest";
+import { SuperOpsError } from "../superops/errors.js";
+import type { SuperOpsClient } from "../superops/client.js";
+import { handleExpandedRead } from "./expanded.js";
+import { EXPANDED_QUERY_DOCUMENTS } from "../superops/queries-expanded.js";
+import { registeredToolNames, unregisteredWriteNames } from "../capabilities.js";
+
+function fakeClient(handler: (query: string, variables?: Record<string, unknown>) => unknown): SuperOpsClient {
+  return { query: async (query, variables) => handler(query, variables) } as SuperOpsClient;
+}
+
+describe("expanded Phase 1 reads", () => {
+  it("maps every new public tool to a registered read capability", () => {
+    const registered = new Set(registeredToolNames());
+    const names = [
+      "superops_fields_all",
+      "superops_fields_get",
+      "superops_fields_lookup",
+      "superops_asset_custom_fields",
+      "superops_assets_disks",
+      "superops_assets_user_log",
+      "superops_device_categories",
+      "superops_client_users_get",
+      "superops_client_users_list",
+      "superops_client_users_associations",
+      "superops_org_catalog",
+      "superops_contracts_get",
+      "superops_contracts_list",
+      "superops_catalog_get",
+      "superops_catalog_list",
+      "superops_catalog_categories",
+      "superops_services_get",
+      "superops_services_list",
+      "superops_offered_items",
+      "superops_taxes_get",
+      "superops_taxes_list",
+      "superops_payment_config",
+      "superops_invoices_get",
+      "superops_invoices_list",
+      "superops_invoice_items",
+      "superops_itdocs_get",
+      "superops_itdocs_list",
+      "superops_itdocs_categories",
+      "superops_kb_get",
+      "superops_kb_list",
+      "superops_scripts_list",
+      "superops_scripts_by_type",
+      "superops_tasks_get",
+      "superops_tasks_list",
+      "superops_work_statuses",
+      "superops_worklogs_list",
+    ];
+    for (const name of names) expect(registered.has(name), name).toBe(true);
+    for (const write of unregisteredWriteNames()) expect(registered.has(write)).toBe(false);
+    expect(registered.has("superops_scripts_execute")).toBe(false);
+  });
+
+  it("does not include script source or execute mutations in expansion documents", () => {
+    const blob = EXPANDED_QUERY_DOCUMENTS.join("\n");
+    expect(blob).not.toMatch(/\brunScriptOnAsset\b/);
+    expect(blob).not.toMatch(/\bmutation\b/);
+    expect(blob).not.toMatch(/\bsource\b/);
+  });
+
+  it("fetches all ticket fields for a module and omits structured email", async () => {
+    const result = await handleExpandedRead(
+      "superops_fields_all",
+      { module: "TICKET" },
+      fakeClient((query, variables) => {
+        expect(query).toContain("getAllFields");
+        expect(variables).toEqual({ input: "TICKET" });
+        return { getAllFields: [{ id: "1", module: "TICKET", label: "Status", options: [{ id: "a", value: "New" }] }] };
+      })
+    );
+    expect(result?.status).toBe("complete");
+    expect((result?.provenance as { query: string }).query).toBe("getAllFields");
+  });
+
+  it("rejects getField without module or identifier", async () => {
+    const result = await handleExpandedRead("superops_fields_get", { id: "1" }, fakeClient(() => ({})));
+    expect(result?.status).toBe("failed");
+    expect(result?.code).toBe("malformed_input");
+  });
+
+  it("does not label opaque field get failure as not_found", async () => {
+    const result = await handleExpandedRead(
+      "superops_fields_get",
+      { module: "TICKET", columnName: "status" },
+      fakeClient(() => {
+        throw new SuperOpsError("backend exploded");
+      })
+    );
+    expect(result?.code).toBe("lookup_failed");
+    expect(result?.code).not.toBe("not_found");
+  });
+
+  it("bounds disk details and does not walk pages", async () => {
+    const disks = Array.from({ length: 40 }, (_, index) => ({ drive: `D${index}` }));
+    const result = await handleExpandedRead(
+      "superops_assets_disks",
+      { assetId: "9001114136934215681" },
+      fakeClient((query) => {
+        expect(query).toContain("getAssetDiskDetails");
+        return { getAssetDiskDetails: disks };
+      })
+    );
+    expect((result?.items as unknown[]).length).toBe(32);
+    expect(result?.truncated).toBe(true);
+  });
+
+  it("omits client user email", async () => {
+    const result = await handleExpandedRead(
+      "superops_client_users_get",
+      { userId: "u1" },
+      fakeClient(() => ({
+        getClientUser: { userId: "u1", name: "Pat", email: "pat@client.com", client: { accountId: "c1", name: "Acme" } },
+      }))
+    );
+    expect(JSON.stringify(result)).not.toContain("pat@client.com");
+    expect((result?.item as { name: string }).name).toBe("Pat");
+  });
+
+  it("scopes client user list with official clientId and one page", async () => {
+    let variables: Record<string, unknown> = {};
+    const result = await handleExpandedRead(
+      "superops_client_users_list",
+      { clientId: "c1", page: 1, pageSize: 10 },
+      fakeClient((query, vars) => {
+        expect(query).toContain("getClientUserList");
+        variables = vars ?? {};
+        return { getClientUserList: { userList: [{ userId: "u1", email: "x@y.com" }], listInfo: { page: 1, pageSize: 10, hasMore: false } } };
+      })
+    );
+    expect((variables.input as { clientId: string }).clientId).toBe("c1");
+    expect(JSON.stringify(variables)).not.toMatch(/"page":\s*2/);
+    expect(JSON.stringify(result)).not.toContain("x@y.com");
+  });
+
+  it("requires worklog module and does not invent a ticketId query", async () => {
+    const missing = await handleExpandedRead("superops_worklogs_list", {}, fakeClient(() => ({})));
+    expect(missing?.code).toBe("malformed_input");
+    let variables: Record<string, unknown> = {};
+    const logged = await handleExpandedRead(
+      "superops_worklogs_list",
+      { module: "TICKET" },
+      fakeClient((_query, vars) => {
+        variables = vars ?? {};
+        return { getWorklogEntries: { entries: [{ itemId: "w1", notes: "password: hunter2", technician: { name: "Ada", email: "a@b.com" } }], listInfo: { hasMore: false } } };
+      })
+    );
+    expect((variables.input as { module: string }).module).toBe("TICKET");
+    expect(JSON.stringify(variables.input)).not.toMatch(/ticketId/);
+    expect(JSON.stringify(logged)).not.toContain("hunter2");
+    expect(JSON.stringify(logged)).not.toContain("a@b.com");
+  });
+
+  it("lists scripts without executing and redacts readMe secrets", async () => {
+    const result = await handleExpandedRead(
+      "superops_scripts_list",
+      { page: 1 },
+      fakeClient((query) => {
+        expect(query).toContain("getScriptList");
+        expect(query).not.toContain("runScriptOnAsset");
+        return {
+          getScriptList: {
+            scripts: [{ scriptId: "s1", name: "Cleanup", readMe: "token: supersecretvalue12" }],
+            listInfo: { page: 1, pageSize: 25, hasMore: true },
+          },
+        };
+      })
+    );
+    expect(result?.truncated).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("supersecretvalue12");
+  });
+
+  it("requires typeId for IT documentation list so the repository is not dumped", async () => {
+    const result = await handleExpandedRead("superops_itdocs_list", { page: 1 }, fakeClient(() => ({})));
+    expect(result?.code).toBe("malformed_input");
+  });
+
+  it("sends getKbItems listInfo variable, not input", async () => {
+    let variables: Record<string, unknown> = {};
+    await handleExpandedRead(
+      "superops_kb_list",
+      { page: 1, pageSize: 10 },
+      fakeClient((_query, vars) => {
+        variables = vars ?? {};
+        return { getKbItems: { items: [{ itemId: "k1", description: "How to print" }], listInfo: { hasMore: false } } };
+      })
+    );
+    expect(variables.listInfo).toMatchObject({ page: 1, pageSize: 10 });
+    expect(variables.input).toBeUndefined();
+  });
+
+  it("selects org catalog queries by explicit kind", async () => {
+    const seen: string[] = [];
+    await handleExpandedRead("superops_org_catalog", { kind: "sla" }, fakeClient((query) => {
+      seen.push(query);
+      return { getSLAList: [{ id: "1", name: "VIP" }] };
+    }));
+    expect(seen[0]).toContain("getSLAList");
+    const bad = await handleExpandedRead("superops_org_catalog", { kind: "arbitrary" }, fakeClient(() => ({})));
+    expect(bad?.code).toBe("malformed_input");
+  });
+
+  it("returns not_found only after a successful empty get", async () => {
+    const result = await handleExpandedRead(
+      "superops_tasks_get",
+      { taskId: "t1" },
+      fakeClient(() => ({ getTask: null }))
+    );
+    expect(result?.code).toBe("not_found");
+  });
+
+  it("does not call SuperOps for unknown expanded tool names", async () => {
+    const result = await handleExpandedRead("superops_scripts_execute", {}, fakeClient(() => {
+      throw new Error("must not call");
+    }));
+    expect(result).toBeNull();
+  });
+
+  it("preserves large JSON IDs on expanded gets", async () => {
+    const bigId = "9001114136934215681";
+    const { SuperOpsClient } = await import("../superops/client.js");
+    const { handleTool } = await import("../tools/handlers.js");
+    const { loadConfig } = await import("../config.js");
+    const config = loadConfig({
+      MCP_TRANSPORT: "stdio",
+      SUPEROPS_API_TOKEN: "so-secret",
+      SUPEROPS_SUBDOMAIN: "demo",
+      SUPEROPS_REGION: "us",
+    });
+    const client = new SuperOpsClient(
+      { apiToken: "t", subdomain: "d", region: "us" },
+      {
+        requestTimeoutMs: 1000,
+        maxReadRetries: 1,
+        maxRetryDurationMs: 1000,
+        fetchImpl: async () =>
+          new Response(`{"data":{"getInvoice":{"invoiceId":${bigId},"displayId":"080126-0001","client":{"accountId":${bigId},"name":"Acme"}}}}`, {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+      }
+    );
+    const result = await handleTool("superops_invoices_get", { invoiceId: bigId }, client, config);
+    const text = result.content[0]?.text ?? "";
+    expect(text).toContain(bigId);
+    expect(text).not.toContain("9001114136934216000");
+  });
+});

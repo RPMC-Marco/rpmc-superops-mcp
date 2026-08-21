@@ -60,3 +60,31 @@ These preserve the 0.1.6 invariants above; they change MCP behavior where 0.1.6 
 - Cursor tool catalog: server `tools/list` was already correct (24 tools). Full Cursor MCP reconnect remains required after deploy
 
 Also re-check after deploy: no write tools; no page 2; no `getAlertList` when `assetId` is set; `rpmc_status` version/commit; identity lookups stay page 1.
+
+## 0.1.8 new reads (NEEDS LIVE CONFIRMATION)
+
+Do not mark these live-confirmed from unit tests. After the next QNAP deploy, fully reconnect MCP and exercise one representative call per tool. Safe failure is `unsupported_filter` / `lookup_failed` / `unavailable`. Never fall back to a tenant scan. Never call `getUnMonitoredAssetList`.
+
+| MCP tool | GraphQL | Input to confirm | Expected | Safe failure |
+|---|---|---|---|---|
+| superops_fields_all | getAllFields | module=`TICKET` | Field definitions, options | lookup_failed |
+| superops_fields_get | getField | module+id or columnName | one Field | lookup_failed, not not_found unless empty payload |
+| superops_fields_lookup | getFields | 1-N identifiers | matching Fields | lookup_failed |
+| superops_asset_custom_fields | getAssetCustomFields | optional modules | CustomField list | lookup_failed |
+| superops_assets_disks | getAssetDiskDetails | live assetId | bounded disks | lookup_failed |
+| superops_assets_user_log | getAssetUserLog | live assetId | bounded user logs | lookup_failed |
+| superops_device_categories | getDeviceCategories | optional ENDPOINT | categories | lookup_failed |
+| superops_client_users_get | getClientUser | userId | user without structured email | lookup_failed |
+| superops_client_users_list | getClientUserList | optional clientId, page 1 | one page | unsupported_filter / lookup_failed |
+| superops_client_users_associations | getClientUserAssociationList | page 1 | one page of associations | lookup_failed |
+| superops_org_catalog | 8 bare lists | each kind | catalog rows | lookup_failed |
+| superops_contracts_get/list | getClientContract(List) | contractId / page 1 | contract metadata | lookup_failed |
+| superops_catalog_* / superops_services_* / superops_offered_items | catalog/service/offered queries | id or page 1 | prices usable, no writes | lookup_failed |
+| superops_taxes_* / superops_payment_config | tax/payment queries | id / kind / page 1 | config lists | lookup_failed |
+| superops_invoices_* | invoice queries | invoiceId / page 1 | totals + bounded lines; no email | lookup_failed |
+| superops_itdocs_* | IT doc queries | itDocId / typeId+page / categories | metadata, no body field on type | lookup_failed |
+| superops_kb_* | getKbItem / getKbItems | itemId / listInfo page 1 | description only, not download API | lookup_failed |
+| superops_scripts_* | getScriptList / ByType | page 1 / type=WINDOWS | metadata, no execute | lookup_failed |
+| superops_tasks_* / superops_work_statuses | getTask(List) / getWorkStatusList | taskId / page 1 | task JSON ticket leaf | lookup_failed |
+| superops_worklogs_list | getWorklogEntries | module=TICKET page 1 | bounded entries; no ticketId-only query | lookup_failed |
+

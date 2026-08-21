@@ -2,7 +2,7 @@
 
 Official source: [SuperOps MSP GraphQL API](https://developer.superops.com/msp) and Help Center [Search, pagination, and sorting](https://support.superops.com/en/articles/6632220-search-pagination-and-sorting) (retrieved 2026-08-21). Community code is reference only.
 
-Live tenant evidence: **0.1.6** (`a2ca686ca22921ed2a87ac93848b2ff2c84f53a5`). Code corrections: **0.1.7**. See `docs/LIVE-CONFIRMATION-MATRIX.md`.
+Live tenant evidence: **0.1.6** (`a2ca686ca22921ed2a87ac93848b2ff2c84f53a5`). Code corrections live on QNAP: **0.1.7**. Undeployed read expansion: **0.1.8**. See `docs/LIVE-CONFIRMATION-MATRIX.md` and `docs/OFFICIAL-READ-INVENTORY.md`.
 
 ## A. Implemented and RPMC live-confirmed
 
@@ -36,14 +36,11 @@ Live tenant evidence: **0.1.6** (`a2ca686ca22921ed2a87ac93848b2ff2c84f53a5`). Co
 - Constrained search: `superops_tickets_search`, `superops_assets_search`, `superops_alerts_search`
 - `superops_sites_list` / `get` / `search`
 
-## D. Technically available, low-value for RPMC troubleshooting (deferred)
+## D. Complete official read accounting
 
-- Invoices, taxes, payment methods/terms, contracts, offered/service catalog items, KB, IT documentation
-- Holiday/business-hour nested site details, designations, teams, technician roles, requester roles
-- Ticket/asset/client custom-field schema dumps (`getAllFields` / `getFields` / `getAssetCustomFields`) — `getStatusList` is deprecated in favor of `getFields`
-- Script list (adjacent to execute; no write surface)
-- Tasks/projects, worklog entries (worklog input is module-scoped, not a documented ticketId get)
-- Device category catalog. Unmonitored remains an argument that reports live-unsupported rather than a separate public tool
+See `docs/OFFICIAL-READ-INVENTORY.md`. Every official SuperOps `get*` query is IMPLEMENTED, EXCLUDED (with reason), or DEFERRED / SPECIAL-PURPOSE. There is no silent low-value bucket.
+
+The 44 newly approved reads are implemented as explicit domain MCP tools (0.1.8) and need a QNAP live-confirmation pass. Deprecated Field replacements are not used. `getUnMonitoredAssetList` is never invoked. `getAssetInfoByTPEndpointIds` is deferred (no RPMC TP endpoint integration). `getAssetPatchStatus` is redundant with `getAsset.patchStatus` / `getAssetPatchDetails`.
 
 ## E. Unsuitable / intentionally not implemented
 
@@ -57,8 +54,11 @@ Live tenant evidence: **0.1.6** (`a2ca686ca22921ed2a87ac93848b2ff2c84f53a5`). Co
 | Client-scoped alerts via `asset.client.name` | Alert type has no documented client filter |
 | Nested association GraphQL selections | `SubSelectionNotAllowed` / official JSON scalars |
 | `Ticket.description` | Not on official Ticket type |
-| Writes, scripts, resolve-alert | Phase 1 read-only |
+| Writes, scripts, resolve-alert | Phase 1 read-only; script *list* tools do not execute |
 | Inferring unmonitored assets from `getAssetList` | Would be a tenant scan; official query is live-unsupported |
+| Deprecated Field replacements (`getStatusList`, `getPriorityList`, …) | SuperOps: use current Field APIs |
+| `getAssetPatchStatus` | Redundant with `getAsset.patchStatus` |
+| `getAssetInfoByTPEndpointIds` | Deferred special-purpose; no RPMC TP endpoint IDs |
 
 ## Privacy (structured email)
 

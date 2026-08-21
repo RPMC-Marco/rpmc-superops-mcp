@@ -13,6 +13,8 @@ describe("capability registry", () => {
     expect(registered).toContain("superops_assets_search");
     expect(registered).toContain("superops_alerts_search");
     expect(registered).toContain("superops_sites_list");
+    expect(registered).toContain("superops_fields_all");
+    expect(registered).toContain("superops_worklogs_list");
     expect(new Set(registered).size).toBe(registered.length);
   });
 

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ToolClassification } from "./audit.js";
+import { EXPANDED_CAPABILITIES } from "./capabilities-expanded.js";
 
 export type OperationKind = "query" | "mutation" | "local";
 
@@ -285,6 +286,7 @@ export const CAPABILITIES: Capability[] = [
     phase1Registered: true,
     inputSchema: emptyInput,
   },
+  ...EXPANDED_CAPABILITIES,
   {
     name: "superops_tickets_create",
     description: "Create a ticket. Not registered in Phase 1.",
