@@ -87,4 +87,31 @@ describe("SuperOpsClient", () => {
     });
     await expect(client.query("query Q { ping }")).rejects.toBeInstanceOf(SuperOpsHttpError);
   });
+
+  it("preserves unquoted SuperOps IDs above Number.MAX_SAFE_INTEGER at the parse boundary", async () => {
+    const accountId = "6623952408805568512";
+    const assetId = "81307563136999424";
+    expect(String(JSON.parse(accountId))).not.toBe(accountId);
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          `{"data":{"getClientSite":{"id":"${assetId}","client":{"accountId":${accountId},"name":"Acme"},"listInfo":{"page":1,"pageSize":25,"totalCount":3},"cpu":{"cpuUsage":{"value":2}}}}}`,
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+    );
+    const client = new SuperOpsClient(creds, { ...options, fetchImpl: fetchImpl as unknown as typeof fetch });
+    const data = (await client.query("query Q { ping }")) as {
+      getClientSite: {
+        id: string;
+        client: { accountId: string };
+        listInfo: { page: number; totalCount: number };
+        cpu: { cpuUsage: { value: number } };
+      };
+    };
+    expect(data.getClientSite.client.accountId).toBe(accountId);
+    expect(data.getClientSite.id).toBe(assetId);
+    expect(data.getClientSite.listInfo.page).toBe(1);
+    expect(data.getClientSite.listInfo.totalCount).toBe(3);
+    expect(data.getClientSite.cpu.cpuUsage.value).toBe(2);
+  });
 });

@@ -76,7 +76,7 @@ function failedResult(input: {
         query: "getAlertsForAsset",
         tenantScan: false,
         documented: true,
-        rpmcLiveConfirmed: false,
+        rpmcLiveConfirmed: true,
       },
       upstreamFailureCategory: input.upstreamFailureCategory ?? input.code,
     },
@@ -301,12 +301,12 @@ export async function investigateAsset(
     query: "getAlertsForAsset",
     tenantScan: false,
     documented: true,
-    rpmcLiveConfirmed: false,
+    rpmcLiveConfirmed: true,
     sortApplied: "none",
   };
   let alerts: Record<string, unknown> = {
     status: "unavailable",
-    reason: "getAlertsForAsset_unconfirmed_on_rpmc",
+    reason: "not_attempted",
     items: [],
     returned: 0,
     totalCount: 0,
@@ -341,23 +341,27 @@ export async function investigateAsset(
       });
     }
   } catch (error) {
-    sections.alerts = "unavailable";
+    sections.alerts = "failed";
     errors.push(noticeFromError("alerts_unavailable", error));
     alerts = {
       ...alerts,
-      status: "unavailable",
+      status: "failed",
       reason: error instanceof SuperOpsError ? "getAlertsForAsset_rejected" : "getAlertsForAsset_failed",
       filter: alertFilter,
     };
   }
 
   // complete = asset loaded and confirmed-class enrichment did not fail.
-  // summary/activity/software/patches are required for complete.
-  // alerts use unconfirmed getAlertsForAsset; unavailable does not flip partial.
-  // After RPMC live-confirms getAlertsForAsset, treat alert query failure like software (failed → partial).
-  const supportingFailed = [sections.summary, sections.activity, sections.software, sections.patches].some(
-    (section) => section === "failed"
-  );
+  // summary/activity/software/patches/alerts are required for complete.
+  // getAlertsForAsset is RPMC live-confirmed; query failure flips partial.
+  // Truncation of a successful alerts page does not.
+  const supportingFailed = [
+    sections.summary,
+    sections.activity,
+    sections.software,
+    sections.patches,
+    sections.alerts,
+  ].some((section) => section === "failed");
   const status: InvestigateStatus = supportingFailed ? "partial" : "complete";
 
   return {

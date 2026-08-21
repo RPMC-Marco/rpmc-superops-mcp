@@ -102,7 +102,7 @@ export const CAPABILITIES: Capability[] = [
   {
     name: "investigate_asset",
     description:
-      "Gather a bounded, sanitized read-only evidence package for one endpoint. Identify with exactly one of assetId (opaque GraphQL ID), hostName, name, or serialNumber. Complete requires the asset plus summary, activity, software, and patches. Asset-scoped alerts are attempted via unconfirmed getAlertsForAsset and do not by themselves make the result partial. Does not diagnose. Does not write.",
+      "Gather a bounded, sanitized read-only evidence package for one endpoint. Identify with exactly one of assetId (opaque GraphQL ID), hostName, name, or serialNumber. Complete requires the asset plus summary, activity, software, patches, and getAlertsForAsset. Truncation of those sections does not by itself make the result partial; a failed getAlertsForAsset query does. Does not diagnose. Does not write.",
     classification: "read",
     operationKind: "query",
     phase1Registered: true,
@@ -153,7 +153,7 @@ export const CAPABILITIES: Capability[] = [
   {
     name: "superops_assets_search",
     description:
-      "Constrained asset search. Requires at least one filter. Exact hostName/name/serialNumber/status/client.name/site.name candidates use operator is. Optional unmonitored uses official getUnMonitoredAssetList. No tenant walk. No fuzzy match.",
+      "Constrained asset search. Requires at least one filter. Exact hostName/name/serialNumber/status/client.name/site.name candidates use operator is. SuperOps default asset-list order (lastCommunicatedTime sort is live-unsupported). unmonitored immediately returns unsupported_filter; getUnMonitoredAssetList is not called and is not faked by a tenant scan. No fuzzy match.",
     classification: "read",
     operationKind: "query",
     phase1Registered: true,
@@ -173,7 +173,7 @@ export const CAPABILITIES: Capability[] = [
   {
     name: "superops_alerts_search",
     description:
-      "Constrained alert search. Requires at least one filter. assetId uses official getAlertsForAsset (no tenant scan). Other filters (status, severity, createdTime) are Help Center candidates on getAlertList, bounded to one page.",
+      "Constrained alert search. Requires at least one filter. assetId uses live-confirmed getAlertsForAsset (no tenant scan). Other filters (status, severity, createdTime) use a bounded getAlertList page.",
     classification: "read",
     operationKind: "query",
     phase1Registered: true,

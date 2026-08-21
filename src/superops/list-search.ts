@@ -3,6 +3,7 @@ import { SuperOpsError } from "./errors.js";
 import { failureCode, isFilterConditionRejected, upstreamFailureCategory } from "../investigate/common.js";
 import { toClientSafeError } from "../privacy/errors.js";
 import type { Condition } from "./conditions.js";
+import { GET_ASSET_LIST } from "./queries.js";
 
 export interface ListQueryFailure {
   ok: false;
@@ -58,4 +59,23 @@ export function listInfoInput(input: {
   if (input.condition) listInfo.condition = input.condition;
   if (input.sort?.length) listInfo.sort = input.sort;
   return listInfo;
+}
+
+/**
+ * Shared getAssetList page. RPMC live-confirmed (0.1.6) that lastCommunicatedTime
+ * DESC is rejected. Do not send that sort, and do not spend a retry round-trip on it.
+ * SuperOps default order is the honest contract.
+ */
+export async function queryGetAssetList(
+  client: SuperOpsClient,
+  input: { page: number; pageSize: number; condition?: Condition },
+  operations: string[]
+): Promise<{ ok: true; data: unknown } | ListQueryFailure> {
+  return queryBoundedList(
+    client,
+    GET_ASSET_LIST,
+    listInfoInput({ page: input.page, pageSize: input.pageSize, condition: input.condition }),
+    operations,
+    "getAssetList"
+  );
 }

@@ -33,7 +33,7 @@ RPMC live read-only validation completed 2026-08-20 against the real RPMC SuperO
 
 - `pageSize` 500 (Computask UI copy vs documented 100). RPMC caps at 100
 - Nested `client { name }` on ticket lists (Sborgi). Do not use
-- Status filter operator `is` / `in` (Computask). **Not exposed in Phase 1.** Official ticket-status example uses `includes` + array. **RPMC tenant status filtering remains unvalidated.**
+- Status filter operator `is` / `in` (Computask). **Not exposed in Phase 1.** Official ticket-status example uses `includes` + array. **RPMC live-confirmed `includes` + array on 0.1.6.**
 
 ## RPMC live-confirmed
 
@@ -53,6 +53,20 @@ Independent live read-only validation against the RPMC SuperOps tenant (2026-08-
 - Credential redaction was **not naturally exercised** during live validation (no credential-like strings in sampled human fields). Unit tests still cover redaction. Do not treat live silence as proof that production data is free of secrets
 - Status filtering remains **unvalidated** and is not exposed on the public MCP schema
 
+### Phase 1 read-surface (RPMC LIVE-CONFIRMED, 0.1.6 / `a2ca686`)
+
+Full read-surface live validation against QNAP 0.1.6: **PASS WITH CORRECTIONS**. Details in `docs/LIVE-CONFIRMATION-MATRIX.md`. Highlights that supersede older “unconfirmed” notes above:
+
+- Ticket `status` `includes` + array; client/site/technician/techGroup/priority name filters; createdTime/updatedTime filters **and** sorts
+- Asset hostName/name/serialNumber/assetId/status/client.name/site.name `is`
+- `getAlertsForAsset` + `createdTime DESC` (asset-scoped; no `getAlertList` fallback)
+- Alert list status/severity/date + sort
+- Client name/emailDomain resolution; sites; `getAssetSummary` / `getAssetActivity`
+- **Unsupported:** `getAssetList` `lastCommunicatedTime` sort; `getUnMonitoredAssetList`
+- JSON-scalar `site.client.accountId` arrived as an unquoted JSON number and lost precision under `JSON.parse` (corrected in 0.1.7 at the parse boundary)
+
+0.1.7 is the correction release for those findings. It is not yet the QNAP baseline until a later targeted deploy.
+
 ### `investigate_ticket` (RPMC LIVE-CONFIRMED, 2026-08-20 / 0.1.3)
 
 Treat as suitable for normal read-only use. Do not change the confirmed `displayId` `is` path.
@@ -69,7 +83,7 @@ Treat as suitable for normal read-only use. Do not change the confirmed `display
 - Ticket-to-asset must **never** be inferred
 - `investigate_ticket` does **not** scan alerts and does not call `getAlertsForAsset`
 - `includes` remains an **unconfirmed fallback** (not exercised live). Keep it only if `is` is rejected by SuperOps. Do not change the confirmed `is` path
-- After a deployed tool-surface change, Cursor may retain a stale `tools/list` catalog. A **full MCP reconnect** refreshes it
+- After a deployed tool-surface change, Cursor may retain a stale `tools/list` catalog. A **full MCP reconnect** refreshes it. `mcp_auth` and idle-resume do **not**. The MCP server already advertises `tools.listChanged` and serves the current catalog on `tools/list`; this is a Cursor session-cache limitation, not a missing server notification on a running process
 - Freeform ticket bodies (DESCRIPTION / conversations / notes) are sanitized for HTML and credential-like patterns. They are **not** general-purpose email redaction. Emails inside ticket evidence may be technically relevant and are left in place
 - Aggregator asset enrichment omits structured `asset.detail.requester.email` while keeping requester id/name. That is not a global email strip
 
@@ -97,35 +111,49 @@ Official `getAsset` requires `AssetIdentifierInput.assetId`, typed as GraphQL `I
 
 Public `assetId` is therefore an opaque non-empty ID (whitespace rejected). Human identifiers are separate fields (`hostName`, `name`, `serialNumber`) and are not inferred from `assetId` format. A hostname passed as `assetId` is sent to `getAsset`; opaque failures stay `lookup_failed` / `unavailable`, never `not_found`.
 
-Help Center documents string operator `is` for ListInfoInput attribute paths. Asset `name`, `hostName`, and `serialNumber` exact `is` lookups are **documented candidates** (page 1, size 5, local exact match, `ambiguous` if duplicates or `hasMore`). They are **not** RPMC live-confirmed yet. `contains` / fuzzy matching is not used.
+Help Center documents string operator `is` for ListInfoInput attribute paths. Asset `name`, `hostName`, and `serialNumber` exact `is` lookups are page 1, size 5, local exact match, `ambiguous` if duplicates or `hasMore`. **RPMC live-confirmed (0.1.6).** `contains` / fuzzy matching is not used. A hostname passed as `assetId` is **not** reinterpreted.
 
 ### Client identifiers and `investigate_client` scoping
 
-`Client.name` is an official String field. SuperOps does **not** document that client names are unique. `emailDomains` is `[String]`; Help Center `includes` takes an array for multi-valued attributes. `getClient` remains the accountId path. Exact name / domain resolution is implemented, not live-confirmed. A single match on page 1 with `hasMore: true` is `ambiguous` (uniqueness was not proven).
+`Client.name` is an official String field. SuperOps does **not** document that client names are unique. `emailDomains` is `[String]`; Help Center `includes` takes an array for multi-valued attributes. `getClient` remains the accountId path. Exact name / domain resolution is **RPMC live-confirmed (0.1.6)**. A single match on page 1 with `hasMore: true` is `ambiguous` (uniqueness was not proven). Natural duplicate-name uniqueness was not exercised live.
 
 Official Ticket `client` JSON: “Returns accountId and name fields as JSON. **The name field can be used in the filter condition.**” That is an allowlist of the nested `name` field, not `accountId`. This MCP does **not** invent a `client.accountId` list filter.
 
 `investigate_client` therefore:
 
 - Scopes sites with official `GetClientSiteListInput.clientId`
-- Retrieves a bounded asset/ticket page with documented `client.name` `is` using the resolved client's name
+- Retrieves a bounded asset/ticket page with documented `client.name` `is` using the resolved client's name (assets: SuperOps default order; do not send live-unsupported `lastCommunicatedTime` sort)
 - Locally keeps only rows whose `client.accountId` equals the resolved accountId
 
 That preserves the invariant that client X's investigation never silently presents another client's records as X. Local pinning of one page cannot invent later-page rows for X; leftover `hasMore` or dropped foreign rows are marked truncated. `superops_tickets_search` / `superops_assets_search` `clientName` remains an honest name search (the caller asked for a name, not an accountId).
 
 ### Sites
 
-Official `getClientSite` / `getClientSiteList`. `GetClientSiteListInput.clientId` is documented for client-scoped sites (used by `investigate_client` and optional `superops_sites_list`). Site `name` `is` is a Help Center string-operator candidate.
+Official `getClientSite` / `getClientSiteList`. `GetClientSiteListInput.clientId` is documented for client-scoped sites (used by `investigate_client` and optional `superops_sites_list`). Site `name` `is` is **RPMC live-confirmed (0.1.6)**.
+
+JSON-scalar `site.client.accountId` was live-observed as an **unquoted JSON number**. Dedicated ticket/client ID fields were quoted strings. `JSON.parse` / `Response.json()` rounds integers above `Number.MAX_SAFE_INTEGER`. Post-parse `String(value)` cannot recover the original digits. The SuperOps HTTP client therefore quotes 16+ digit JSON integer tokens before parse. Safe integers, floats, counts, CPU/memory, and pagination stay numeric. Equality uses `scalarId`: strings as-is; safe integers stringify; already-rounded unsafe numbers are refused rather than correlated.
 
 ### Alerts for one asset
 
-Official MSP docs include `getAlertsForAsset(input: AssetDetailsListInput!)` — “Fetches the list of alerts of an asset.” That is the documented asset-scoped query (same input type as software/patches: `assetId` + `listInfo`). RPMC live-confirmed that `Alert.asset.assetId` exists on alert payloads; **`getAlertsForAsset` itself is not yet RPMC live-confirmed**.
+Official MSP docs include `getAlertsForAsset(input: AssetDetailsListInput!)` — “Fetches the list of alerts of an asset.” **RPMC live-confirmed (0.1.6):** accepted, asset-scoped, `createdTime DESC` accepted, `listInfo.hasMore`/`totalCount` present, returned alerts belong to the requested asset. **No `getAlertList` fallback** is used or allowed.
 
-`investigate_asset` uses a single page of `getAlertsForAsset` (page 1, pageSize 25). `superops_alerts_search` with `assetId` uses the same query. Tenant-wide `getAlertList` is used only when searching alerts **without** an assetId, still one page, with explicit filters. Optional `createdTime DESC` sort is documented `SortInput` generally; whether a given list accepts that attribute is unconfirmed and is retried without sort if rejected.
+`investigate_asset` uses a single page of `getAlertsForAsset` (page 1, pageSize 25) with `createdTime DESC`. If SuperOps rejected that sort, a no-sort retry remains as defensive behavior for a live-confirmed-working sort. `superops_alerts_search` with `assetId` uses the same query. Tenant-wide `getAlertList` is used only when searching alerts **without** an assetId.
 
-**`investigate_asset` complete vs partial:** `failed` means the asset was not loaded. `partial` means a confirmed-class enrichment query failed (`summary`, `activity`, `software`, `patches`). Truncation of those sections does not by itself make the result partial. `getAlertsForAsset` is documented but not RPMC live-confirmed; an unavailable alerts section does **not** by itself make the investigation partial, and audit `success` still follows `outcome === complete`. Lack of live confirmation does not redefine `complete` on each call. After `getAlertsForAsset` is live-confirmed, treat an alert-query failure like software/patches (`failed` → overall `partial`). Until then, keep alerts optional/isolated.
+**`investigate_asset` complete vs partial (0.1.7):** `failed` means the asset was not loaded. `partial` means a confirmed-class enrichment query failed (`summary`, `activity`, `software`, `patches`, **`alerts`**). Truncation of those sections does not by itself make the result partial. A genuine `getAlertsForAsset` query failure makes the investigation `partial`. Audit `success` still follows `outcome === complete`.
+
+### getAssetList sort
+
+Help Center documents `ListInfoInput.sort`. **RPMC live-confirmed (0.1.6): `lastCommunicatedTime` DESC is rejected** on `getAssetList`. 0.1.7 therefore does **not** send that sort on any `getAssetList` path (`assets_search`, `investigate_client`, identity resolve). SuperOps default order is the contract. Retry-without-sort is not kept for a known-unsupported sort (it wasted a request and made `investigate_client` `partial` when the filter itself was valid). Ticket `createdTime`/`updatedTime` sort remains live-confirmed and is still sent.
+
+### getUnMonitoredAssetList
+
+Official query exists. **RPMC live-rejected (0.1.6)** both with and without sort. `superops_assets_search.unmonitored` returns `unsupported_filter` immediately and does **not** call SuperOps. Unmonitored is **not** inferred by enumerating `getAssetList`.
 
 Constrained ticket/asset/alert search tools never walk additional pages. Rejected filters return `unsupported_filter`.
+
+### Structured email
+
+Aggregators omit structured `email` keys. Primitive `superops_alerts_list` also omits `asset.owner.email` (0.1.7). Freeform `message`/`description` and ticket bodies are not general-purpose email redaction.
 
 See `docs/READ-SURFACE.md` and `docs/LIVE-CONFIRMATION-MATRIX.md`.
 

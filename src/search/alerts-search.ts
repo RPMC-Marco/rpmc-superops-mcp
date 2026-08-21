@@ -143,7 +143,7 @@ export async function searchAlerts(args: Record<string, unknown>, client: SuperO
         filterAttributes: ["assetId", ...filterAttributes],
         sortAttribute: "createdTime",
         logicalOperations,
-        rpmcLiveConfirmed: false,
+        rpmcLiveConfirmed: true,
       },
     };
   }
@@ -177,7 +177,7 @@ export async function searchAlerts(args: Record<string, unknown>, client: SuperO
       filterAttributes,
       sortAttribute: "createdTime",
       logicalOperations,
-      rpmcLiveConfirmed: false,
+      rpmcLiveConfirmed: true,
     },
   };
 }

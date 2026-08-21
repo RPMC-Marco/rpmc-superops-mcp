@@ -22,6 +22,17 @@ export function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+/**
+ * Normalize a SuperOps identifier for equality.
+ * Strings are used as-is. Safe integers can stringify losslessly.
+ * Unsafe JS numbers are rejected: the original digits are already gone.
+ */
+export function scalarId(value: unknown): string | undefined {
+  if (typeof value === "string" && value) return value;
+  if (typeof value === "number" && Number.isSafeInteger(value)) return String(value);
+  return undefined;
+}
+
 export function timeMs(value: unknown): number {
   if (typeof value !== "string" || !value) return 0;
   const parsed = Date.parse(value);
@@ -29,8 +40,7 @@ export function timeMs(value: unknown): number {
 }
 
 export function accountIdFrom(value: unknown): string | undefined {
-  const rec = asRecord(value);
-  return typeof rec.accountId === "string" && rec.accountId ? rec.accountId : undefined;
+  return scalarId(asRecord(value).accountId);
 }
 
 /**

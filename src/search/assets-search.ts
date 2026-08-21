@@ -1,15 +1,13 @@
 import type { SuperOpsClient } from "../superops/client.js";
-import * as Q from "../superops/queries.js";
 import {
   and,
   conditionAttributes,
   exactIs,
   hasAnyFilter,
   pageClamp,
-  sortBy,
   stringArg,
 } from "../superops/conditions.js";
-import { listInfoInput, queryBoundedList } from "../superops/list-search.js";
+import { queryGetAssetList } from "../superops/list-search.js";
 import { asArray, asRecord, omitStructuredEmail, type InvestigateStatus } from "../investigate/common.js";
 import { parseAssetId } from "../assets/asset-ref.js";
 
@@ -33,6 +31,7 @@ function searchFailed(input: {
       tenantScan: false,
       resolution: "unresolved",
       filterAttributes: input.filterAttributes ?? [],
+      sortAttribute: null,
       logicalOperations: input.logicalOperations,
       upstreamFailureCategory: input.upstreamFailureCategory ?? input.code,
     },
@@ -41,7 +40,18 @@ function searchFailed(input: {
 
 export async function searchAssets(args: Record<string, unknown>, client: SuperOpsClient): Promise<Record<string, unknown>> {
   const logicalOperations: string[] = [];
-  if (!hasAnyFilter(args, FILTER_KEYS)) {
+  if (args.unmonitored === true) {
+    return searchFailed({
+      code: "unsupported_filter",
+      message:
+        "getUnMonitoredAssetList is not supported on the RPMC SuperOps tenant; unmonitored is not inferred by scanning getAssetList",
+      logicalOperations,
+      query: "getUnMonitoredAssetList",
+      upstreamFailureCategory: "unsupported_on_rpmc",
+    });
+  }
+
+  if (!hasAnyFilter(args, FILTER_KEYS.filter((key) => key !== "unmonitored"))) {
     return searchFailed({
       code: "malformed_input",
       message: "superops_assets_search requires at least one explicit filter; use superops_assets_list for an unfiltered page",
@@ -87,60 +97,12 @@ export async function searchAssets(args: Record<string, unknown>, client: SuperO
   const condition = and(operands);
   const filterAttributes = conditionAttributes(condition);
   const paging = pageClamp(args.page, args.pageSize);
-  const unmonitored = args.unmonitored === true;
-  const query = unmonitored ? Q.GET_UNMONITORED_ASSET_LIST : Q.GET_ASSET_LIST;
-  const operationName = unmonitored ? "getUnMonitoredAssetList" : "getAssetList";
-  const sort = [sortBy("lastCommunicatedTime", "DESC")];
 
-  const listed = await queryBoundedList(
+  const listed = await queryGetAssetList(
     client,
-    query,
-    listInfoInput({ page: paging.page, pageSize: paging.pageSize, condition, sort }),
-    logicalOperations,
-    operationName
+    { page: paging.page, pageSize: paging.pageSize, condition },
+    logicalOperations
   );
-
-  const finish = (data: unknown, resolution: string, sortApplied: string | null, warnings: Array<{ code: string; message: string }>) => {
-    const payload = asRecord(asRecord(data)[unmonitored ? "getUnMonitoredAssetList" : "getAssetList"]);
-    return {
-      status: "complete" as InvestigateStatus,
-      items: asArray(payload.assets).map((item) => omitStructuredEmail(item)),
-      listInfo: payload.listInfo,
-      warnings,
-      provenance: {
-        query: operationName,
-        tenantScan: false,
-        resolution,
-        filterAttributes,
-        sortAttribute: sortApplied,
-        logicalOperations,
-        rpmcLiveConfirmed: false,
-      },
-    };
-  };
-
-  if (!listed.ok && listed.code === "unsupported_filter") {
-    const retry = await queryBoundedList(
-      client,
-      query,
-      listInfoInput({ page: paging.page, pageSize: paging.pageSize, condition }),
-      logicalOperations,
-      operationName
-    );
-    if (!retry.ok) {
-      return searchFailed({
-        code: retry.code,
-        message: retry.message,
-        logicalOperations,
-        filterAttributes,
-        query: operationName,
-        upstreamFailureCategory: retry.upstreamFailureCategory,
-      });
-    }
-    return finish(retry.data, "condition_without_sort", null, [
-      { code: "sort_unconfirmed", message: "lastCommunicatedTime sort was rejected; results use SuperOps default order" },
-    ]);
-  }
 
   if (!listed.ok) {
     return searchFailed({
@@ -148,10 +110,24 @@ export async function searchAssets(args: Record<string, unknown>, client: SuperO
       message: listed.message,
       logicalOperations,
       filterAttributes,
-      query: operationName,
       upstreamFailureCategory: listed.upstreamFailureCategory,
     });
   }
 
-  return finish(listed.data, "condition_and_sort", "lastCommunicatedTime", []);
+  const payload = asRecord(asRecord(listed.data).getAssetList);
+  return {
+    status: "complete" as InvestigateStatus,
+    items: asArray(payload.assets).map((item) => omitStructuredEmail(item)),
+    listInfo: payload.listInfo,
+    warnings: [],
+    provenance: {
+      query: "getAssetList",
+      tenantScan: false,
+      resolution: "condition_default_order",
+      filterAttributes,
+      sortAttribute: null,
+      logicalOperations,
+      rpmcLiveConfirmed: true,
+    },
+  };
 }

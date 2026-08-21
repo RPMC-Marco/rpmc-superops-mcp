@@ -10,6 +10,7 @@
  */
 
 import type { AppConfig, SuperOpsRegion } from "../config.js";
+import { parseSuperOpsJson } from "./json-ids.js";
 import { MinuteLimiter } from "./limiter.js";
 import {
   SuperOpsError,
@@ -145,7 +146,8 @@ export class SuperOpsClient {
 
     let result: GraphQLResponse<T>;
     try {
-      result = (await response.json()) as GraphQLResponse<T>;
+      const text = await response.text();
+      result = parseSuperOpsJson(text) as GraphQLResponse<T>;
     } catch (error) {
       throw new SuperOpsMalformedResponseError(
         error instanceof Error ? error.message : String(error)

@@ -2,32 +2,38 @@
 
 Official source: [SuperOps MSP GraphQL API](https://developer.superops.com/msp) and Help Center [Search, pagination, and sorting](https://support.superops.com/en/articles/6632220-search-pagination-and-sorting) (retrieved 2026-08-21). Community code is reference only.
 
+Live tenant evidence: **0.1.6** (`a2ca686ca22921ed2a87ac93848b2ff2c84f53a5`). Code corrections: **0.1.7**. See `docs/LIVE-CONFIRMATION-MATRIX.md`.
+
 ## A. Implemented and RPMC live-confirmed
 
 - Transport/auth, pagination `hasMore` null→false, JSON association leaf selection
 - Primitive reads: clients list/get, tickets list/get/conversations/notes, assets list/get/software/patches, alerts list, technicians list/groups, `superops_test_connection`, `rpmc_status`
 - `investigate_ticket` including `displayId` + operator `is` + `DDMMYY-NNNN`, DESCRIPTION/`originalBody`, explicit `assetId` enrichment, no ticket→asset inference
 - Ticket display number convention; `createdTime` wins if date encoding disagrees
+- Ticket filters: `status` `includes` + array; `client.name` / `site.name` / `technician.name` / `techGroup.name` / `priority` `is`; `createdTime`/`updatedTime` `on`/`inLast`
+- Ticket sort: `createdTime DESC` and `updatedTime DESC` change order
+- Asset filters: `hostName` / `name` / `serialNumber` / `assetId` / `status` / `client.name` / `site.name` `is`
+- `getAlertsForAsset` (investigate_asset / alerts_search by assetId), including `createdTime DESC`, `listInfo.hasMore`/`totalCount`, asset-scoped only. No `getAlertList` fallback
+- Alert list filters without assetId: status / severity / `createdTime`, plus `createdTime DESC`
+- Client resolution: `accountId`, `name` `is`, `emailDomains` `includes`
+- Sites: `getClientSiteList.clientId`, `getClientSite`, name `is`
+- `getAssetSummary`, `getAssetActivity`
+- Identity lookups: page 1 only. Search: one requested page. No tenant scans
 
-## B. Implemented, awaiting RPMC live confirmation
+## B. Implemented, still unconfirmed or live-unsupported
 
-See `docs/LIVE-CONFIRMATION-MATRIX.md`. Highlights:
+- Ticket `displayId` `includes` fallback (keep only if `is` is rejected)
+- Natural duplicate hostName / client-name uniqueness (`ambiguous` is implemented, not naturally seen live)
+- Live container stderr audit inspection (code is allowlisted)
+- **Unsupported on this tenant:** `getAssetList` `lastCommunicatedTime` sort — not sent (SuperOps default order)
+- **Unsupported on this tenant:** `getUnMonitoredAssetList` — `unmonitored` returns `unsupported_filter` without calling SuperOps and without enumerating assets
 
-- `getAlertsForAsset` (investigate_asset / alerts_search by assetId)
-- Asset `hostName` / `name` / `serialNumber` operator `is`
-- Ticket `status` `includes` + array; `client.name` / `site.name` / `technician.name` / `techGroup.name` `is`; `createdTime`/`updatedTime` `on` placeholders and `inLast`
-- Ticket/asset/alert server-side `sort`
-- Client `name` `is`, `emailDomains` `includes`
-- `getClientSiteList.clientId`, site `name` `is`
-- `getAssetSummary`, `getAssetActivity`, `getUnMonitoredAssetList`
-- Asset `client.name` / `site.name` / `status` `is`
+## C. Aggregator status semantics (0.1.7)
 
-## C. Useful read capability implemented in this batch (was missing)
-
-- `investigate_asset` human identity + summary/activity. `complete` requires asset plus summary/activity/software/patches; unconfirmed `getAlertsForAsset` unavailability does not by itself make the result partial.
-- `investigate_client` (sites via official `clientId`; assets/tickets via documented `client.name` then local `accountId` pin)
-- Opaque `assetId` (GraphQL `ID`, not a numeric-length rule)
-- `superops_tickets_search`, `superops_assets_search`, `superops_alerts_search`
+- `investigate_asset` `complete` requires asset plus summary, activity, software, patches, **and** `getAlertsForAsset`. Truncation of those sections does not by itself make the result partial. A failed `getAlertsForAsset` query **does** (`partial`)
+- `investigate_client` sites via official `clientId`; assets/tickets via documented `client.name` then local `accountId` pin. Asset list uses default SuperOps order (no `lastCommunicatedTime` sort)
+- Opaque `assetId` (GraphQL `ID`, not a numeric-length rule). Opaque get failure is never `not_found`
+- Constrained search: `superops_tickets_search`, `superops_assets_search`, `superops_alerts_search`
 - `superops_sites_list` / `get` / `search`
 
 ## D. Technically available, low-value for RPMC troubleshooting (deferred)
@@ -37,7 +43,7 @@ See `docs/LIVE-CONFIRMATION-MATRIX.md`. Highlights:
 - Ticket/asset/client custom-field schema dumps (`getAllFields` / `getFields` / `getAssetCustomFields`) — `getStatusList` is deprecated in favor of `getFields`
 - Script list (adjacent to execute; no write surface)
 - Tasks/projects, worklog entries (worklog input is module-scoped, not a documented ticketId get)
-- Device category catalog, unmonitored as a separate public tool (folded into `superops_assets_search.unmonitored`)
+- Device category catalog. Unmonitored remains an argument that reports live-unsupported rather than a separate public tool
 
 ## E. Unsuitable / intentionally not implemented
 
@@ -52,3 +58,12 @@ See `docs/LIVE-CONFIRMATION-MATRIX.md`. Highlights:
 | Nested association GraphQL selections | `SubSelectionNotAllowed` / official JSON scalars |
 | `Ticket.description` | Not on official Ticket type |
 | Writes, scripts, resolve-alert | Phase 1 read-only |
+| Inferring unmonitored assets from `getAssetList` | Would be a tenant scan; official query is live-unsupported |
+
+## Privacy (structured email)
+
+Aggregators and constrained search omit structured `email` keys (requester/owner/user objects). Primitive `superops_alerts_list` does the same for `asset.owner.email`. Freeform ticket/alert `message`, `description`, conversations, and notes are **not** general-purpose email redaction; emails inside those fields can be diagnostically relevant.
+
+## Cursor MCP catalog
+
+The server `tools/list` surface is static for a process lifetime and already advertises `listChanged`. After a QNAP image with a new tool set, a **full Cursor MCP reconnect** is required. `mcp_auth` and idle-resume do not refresh a stale Cursor session catalog. This is operational, not a missing `notifications/tools/list_changed` on a running process.

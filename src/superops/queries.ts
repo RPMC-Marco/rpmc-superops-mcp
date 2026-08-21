@@ -334,6 +334,7 @@ query getAssetActivity($input: AssetDetailsListInput!) {
 }
 `;
 
+/** Official query. RPMC live-rejected (0.1.6) with and without sort. Not called at runtime. */
 export const GET_UNMONITORED_ASSET_LIST = `
 query getUnMonitoredAssetList($input: ListInfoInput!) {
   getUnMonitoredAssetList(input: $input) {
@@ -355,6 +356,7 @@ query getUnMonitoredAssetList($input: ListInfoInput!) {
   }
 }
 `;
+
 
 export const GET_CLIENT_SITE = `
 query getClientSite($input: ClientSiteIdentifierInput!) {

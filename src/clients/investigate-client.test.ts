@@ -34,6 +34,7 @@ describe("investigateClient", () => {
         return { getClientSiteList: { sites: [{ id: "s1", name: "HQ" }], listInfo: { page: 1, pageSize: 25, hasMore: false, totalCount: 1 } } };
       }
       if (query.includes("getAssetList")) {
+        expect((variables as { input: Record<string, unknown> }).input.sort).toBeUndefined();
         expect((variables as { input: { condition: unknown } }).input.condition).toEqual({
           attribute: "client.name",
           operator: "is",
@@ -56,6 +57,7 @@ describe("investigateClient", () => {
     expect((result.tickets as { items: unknown[] }).items).toHaveLength(1);
     expect(calls.filter((call) => call.query.includes("getClientList"))).toHaveLength(1);
     expect(calls.some((call) => call.query.includes("getAlertList"))).toBe(false);
+    expect(JSON.stringify(calls.map((call) => call.variables))).not.toMatch(/lastCommunicatedTime/);
   });
 
   it("omits name-matched assets/tickets that belong to another accountId", async () => {

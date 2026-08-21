@@ -15,6 +15,7 @@ import { searchAssets } from "../search/assets-search.js";
 import { getSite, listSites, searchSites } from "../search/sites.js";
 import { searchTickets } from "../search/tickets-search.js";
 import { investigateTicket } from "../tickets/investigate-ticket.js";
+import { omitStructuredEmail } from "../investigate/common.js";
 import type { ToolOutcome } from "../audit.js";
 
 export interface ToolResult {
@@ -57,7 +58,7 @@ export async function handleTool(
       case "rpmc_status":
         return jsonResult({
           product: "rpmc-superops-mcp",
-          version: "0.1.6",
+          version: "0.1.7",
           phase: 1,
           readonly: true,
           writesRegistered: false,
@@ -172,7 +173,10 @@ export async function handleTool(
         );
       }
       case "superops_alerts_list": {
-        return jsonResult(await client.query(Q.GET_ALERT_LIST, { input: pageInput(args) }));
+        const data = asRecord(await client.query(Q.GET_ALERT_LIST, { input: pageInput(args) }));
+        const list = asRecord(data.getAlertList);
+        const alerts = Array.isArray(list.alerts) ? list.alerts.map(omitStructuredEmail) : [];
+        return jsonResult({ getAlertList: { ...list, alerts } });
       }
       case "superops_technicians_list": {
         return jsonResult(await client.query(Q.GET_TECHNICIAN_LIST, { input: pageInput(args) }));

@@ -8,7 +8,7 @@ This document remains the procedure for a later **batched** staging re-validatio
 
 ## Cursor MCP catalog
 
-After a deployed tool-surface change (new tool, schema change), Cursor may keep a stale `tools/list` catalog. A **full MCP reconnect** refreshes it. A process restart alone may not.
+After a deployed tool-surface change (new tool, schema change), Cursor may keep a stale `tools/list` catalog. Observed on 0.1.6: QNAP HTTP `tools/list` returned all 24 tools while a Cursor session remained on a 15-tool catalog. `mcp_auth` and idle-resume did not recache it. A **full MCP reconnect** is required. The server implementation already returns the live catalog and advertises `listChanged`; do not treat this as a missing `notifications/tools/list_changed` on a running process.
 
 ## Procedure (operator)
 
@@ -36,7 +36,7 @@ Record pass/fail, actual field names, and a short redacted sample (no secrets, n
 - Assets / software / patches
 - Pagination: `page`, `pageSize`, `hasMore`; page size 100
 - Ticket↔asset relationship if any field appears in live payloads (not in official Ticket type)
-- Status filtering on **`superops_tickets_list` remains omitted**. Status lives only on constrained `superops_tickets_search` (`includes` + array) pending live confirmation
+- Status filtering on **ticket search** is RPMC live-confirmed (0.1.6: `includes` + array). Primitive `superops_tickets_list` remains unfiltered by status
 - Execute every row in `docs/LIVE-CONFIRMATION-MATRIX.md` in this single pass
 - Privacy: human-entered fields should keep technical evidence; credential-like strings should be `[redacted]` with `_privacy` or per-field `redaction`. Freeform bodies are **not** general-purpose email redaction
 - `investigate_ticket` (already live-confirmed): spot-check `displayId` `is`, zero-match `not_found`, stderr audit `outcome`/`success` without customer content

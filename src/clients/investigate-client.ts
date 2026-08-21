@@ -1,7 +1,7 @@
 import type { SuperOpsClient } from "../superops/client.js";
 import * as Q from "../superops/queries.js";
 import { exclusiveStringIdentity, exactIs, pageClamp, sortBy } from "../superops/conditions.js";
-import { listInfoInput, queryBoundedList } from "../superops/list-search.js";
+import { listInfoInput, queryBoundedList, queryGetAssetList } from "../superops/list-search.js";
 import {
   asArray,
   asRecord,
@@ -128,17 +128,14 @@ export async function investigateClient(
 
   const assets = attachPinnedPage(
     clientName
-      ? await queryBoundedList(
+      ? await queryGetAssetList(
           client,
-          Q.GET_ASSET_LIST,
-          listInfoInput({
+          {
             page: paging.page,
             pageSize: paging.pageSize,
             condition: exactIs("client.name", clientName),
-            sort: [sortBy("lastCommunicatedTime", "DESC")],
-          }),
-          logicalOperations,
-          "getAssetList"
+          },
+          logicalOperations
         )
       : { ok: false as const, message: "Client name missing" },
     "getAssetList",
@@ -191,6 +188,7 @@ export async function investigateClient(
       },
       logicalOperations,
       filterAttributes: clientName ? ["client.name"] : [],
+      sortAttribute: null,
       clientScope: {
         sites: "clientId",
         assetsTickets: "client.name locally pinned to accountId",

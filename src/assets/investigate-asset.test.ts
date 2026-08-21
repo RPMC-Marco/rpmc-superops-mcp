@@ -132,9 +132,10 @@ describe("investigateAsset", () => {
     expect((input.listInfo as { sort: unknown }).sort).toEqual([{ attribute: "createdTime", order: "DESC" }]);
     expect(calls.some((call) => call.query.includes("getAlertList"))).toBe(false);
     expect(JSON.stringify(calls.map((call) => call.variables))).not.toMatch(/"page":\s*2/);
-    expect((result.provenance as { alertFilter: { tenantScan: boolean; query: string } }).alertFilter).toMatchObject({
+    expect((result.provenance as { alertFilter: { tenantScan: boolean; query: string; rpmcLiveConfirmed: boolean } }).alertFilter).toMatchObject({
       query: "getAlertsForAsset",
       tenantScan: false,
+      rpmcLiveConfirmed: true,
     });
   });
 
@@ -270,7 +271,7 @@ describe("investigateAsset", () => {
     expect((result.warnings as Array<{ code: string }>).some((item) => item.code === "alert_sort_unconfirmed")).toBe(true);
   });
 
-  it("surfaces alerts unavailable without falling back to getAlertList", async () => {
+  it("makes investigate_asset partial when live-confirmed getAlertsForAsset fails, without getAlertList", async () => {
     let alertList = 0;
     const client = fakeClient((query) => {
       if (query.includes("query getAsset(")) return assetGet();
@@ -289,10 +290,37 @@ describe("investigateAsset", () => {
     });
     const result = await investigateAsset({ assetId: ASSET_ID }, client);
     expect(alertList).toBe(0);
-    expect(result.status).toBe("complete");
-    expect((result.alerts as { status: string }).status).toBe("unavailable");
+    expect(result.status).toBe("partial");
+    expect((result.alerts as { status: string }).status).toBe("failed");
     expect((result.errors as Array<{ code: string }>)[0]?.code).toBe("alerts_unavailable");
-    expect((result.provenance as { sections: { alerts: string } }).sections.alerts).toBe("unavailable");
+    expect((result.provenance as { sections: { alerts: string }; alertFilter: { rpmcLiveConfirmed: boolean } }).sections.alerts).toBe(
+      "failed"
+    );
+    expect((result.provenance as { alertFilter: { rpmcLiveConfirmed: boolean } }).alertFilter.rpmcLiveConfirmed).toBe(true);
+    const audit = investigationAuditFromResult(result);
+    expect(audit.outcome).toBe("partial");
+  });
+
+  it("keeps investigate_asset complete when getAlertsForAsset succeeds but the page is truncated", async () => {
+    const client = fakeClient((query) => {
+      if (query.includes("query getAsset(")) return assetGet();
+      if (query.includes("getAssetSoftwareList")) return { getAssetSoftwareList: emptySupport().getAssetSoftwareList };
+      if (query.includes("getAssetPatchDetails")) return { getAssetPatchDetails: emptySupport().getAssetPatchDetails };
+      if (query.includes("getAlertsForAsset")) {
+        return {
+          getAlertsForAsset: {
+            alerts: [{ id: "a1", status: "Open", createdTime: "2026-08-20T00:00:00.000Z", message: "x" }],
+            listInfo: { page: 1, pageSize: 25, hasMore: true, totalCount: 147 },
+          },
+        };
+      }
+      throw new Error("unexpected");
+    });
+    const result = await investigateAsset({ assetId: ASSET_ID }, client);
+    expect(result.status).toBe("complete");
+    expect((result.alerts as { status: string; truncated: boolean }).status).toBe("truncated");
+    expect((result.alerts as { truncated: boolean }).truncated).toBe(true);
+    expect((result.provenance as { sections: { alerts: string } }).sections.alerts).toBe("truncated");
   });
 
   it("accepts a short opaque GraphQL ID example", async () => {
@@ -419,6 +447,10 @@ describe("investigateAsset", () => {
     expect(blob).not.toContain("Jane Doe");
     expect(blob).not.toContain("203.0.113.10");
     expect(blob).not.toContain("FRONT-DESK-PC");
-    expect(event.metadata?.alertFilter).toMatchObject({ query: "getAlertsForAsset", tenantScan: false });
+    expect(event.metadata?.alertFilter).toMatchObject({
+      query: "getAlertsForAsset",
+      tenantScan: false,
+      rpmcLiveConfirmed: true,
+    });
   });
 });

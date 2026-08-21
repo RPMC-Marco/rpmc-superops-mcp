@@ -1,7 +1,6 @@
 import type { SuperOpsClient } from "../superops/client.js";
-import * as Q from "../superops/queries.js";
 import { exactIs } from "../superops/conditions.js";
-import { listInfoInput, queryBoundedList } from "../superops/list-search.js";
+import { queryGetAssetList } from "../superops/list-search.js";
 import { asArray, asRecord, boundedLookupNotUnique } from "../investigate/common.js";
 import { parseAssetId } from "./asset-ref.js";
 
@@ -30,16 +29,14 @@ async function resolveByList(
   operations: string[]
 ): Promise<AssetResolution> {
   const method = `${field}_condition_is`;
-  const listed = await queryBoundedList(
+  const listed = await queryGetAssetList(
     client,
-    Q.GET_ASSET_LIST,
-    listInfoInput({
+    {
       page: 1,
       pageSize: ASSET_LOOKUP_PAGE_SIZE,
       condition: exactIs(field, value),
-    }),
-    operations,
-    "getAssetList"
+    },
+    operations
   );
   if (!listed.ok) {
     return {

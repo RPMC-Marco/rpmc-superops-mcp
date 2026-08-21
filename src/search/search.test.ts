@@ -98,7 +98,7 @@ describe("searchTickets", () => {
 });
 
 describe("searchAssets", () => {
-  it("sends hostName is and does not tenant-scan", async () => {
+  it("sends hostName is, uses SuperOps default order, and does not tenant-scan", async () => {
     const calls: Array<{ query: string; variables?: Record<string, unknown> }> = [];
     const client = fakeClient((query, variables) => {
       calls.push({ query, variables });
@@ -114,20 +114,26 @@ describe("searchAssets", () => {
     const input = (calls[0]?.variables as { input: Record<string, unknown> }).input;
     expect(input.condition).toEqual({ attribute: "hostName", operator: "is", value: "DESKTOP-9J8RLGD" });
     expect(input.page).toBe(1);
+    expect(input.sort).toBeUndefined();
+    expect(calls).toHaveLength(1);
     expect(calls[0]?.query).toContain("getAssetList");
     expect(calls.some((call) => call.query.includes("getAlertList"))).toBe(false);
+    expect((result.provenance as { sortAttribute: null; rpmcLiveConfirmed: boolean }).sortAttribute).toBeNull();
+    expect((result.provenance as { rpmcLiveConfirmed: boolean }).rpmcLiveConfirmed).toBe(true);
   });
 
-  it("uses getUnMonitoredAssetList when unmonitored is true", async () => {
-    let queryUsed = "";
-    const client = fakeClient((query) => {
-      queryUsed = query;
-      return {
-        getUnMonitoredAssetList: { assets: [], listInfo: { page: 1, pageSize: 25, hasMore: false, totalCount: 0 } },
-      };
+  it("returns unsupported_filter for unmonitored without calling SuperOps", async () => {
+    const client = fakeClient(() => {
+      throw new Error("must not call SuperOps");
     });
-    await searchAssets({ unmonitored: true, clientName: "Acme" }, client);
-    expect(queryUsed).toContain("getUnMonitoredAssetList");
+    const result = await searchAssets({ unmonitored: true, clientName: "Acme" }, client);
+    expect(result.status).toBe("failed");
+    expect(result.code).toBe("unsupported_filter");
+    expect((result.provenance as { query: string; tenantScan: boolean; logicalOperations: string[] }).query).toBe(
+      "getUnMonitoredAssetList"
+    );
+    expect((result.provenance as { tenantScan: boolean }).tenantScan).toBe(false);
+    expect((result.provenance as { logicalOperations: string[] }).logicalOperations).toEqual([]);
   });
 });
 
@@ -143,6 +149,8 @@ describe("searchAlerts", () => {
     expect(result.status).toBe("complete");
     expect(queries.some((item) => item.includes("getAlertsForAsset"))).toBe(true);
     expect(queries.some((item) => item.includes("getAlertList"))).toBe(false);
+    expect((result.provenance as { rpmcLiveConfirmed: boolean; query: string }).rpmcLiveConfirmed).toBe(true);
+    expect((result.provenance as { query: string }).query).toBe("getAlertsForAsset");
   });
 
   it("uses bounded getAlertList with createdTime placeholder and sort, never page 2", async () => {

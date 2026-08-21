@@ -86,7 +86,7 @@ export async function searchSites(args: Record<string, unknown>, client: SuperOp
       resolution: clientId ? "clientId_and_optional_name" : "name_condition_is",
       filterAttributes: condition ? ["name"] : [],
       logicalOperations,
-      rpmcLiveConfirmed: false,
+      rpmcLiveConfirmed: true,
     },
   };
 }

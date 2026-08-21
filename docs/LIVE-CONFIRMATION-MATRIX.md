@@ -1,39 +1,62 @@
-# Future live-confirmation matrix
+# Live-confirmation matrix
 
-One QNAP staging pass should cover every row. Do not add public probe-only tools. After deploy, fully reconnect the Cursor MCP client.
+Validation against the RPMC SuperOps tenant. Do not add public probe-only tools. After a tool-surface deploy, **fully reconnect** the Cursor MCP client (`mcp_auth` and idle-resume do not recache `tools/list`).
 
-Legend: **safe failure** is the MCP outcome when SuperOps rejects the candidate. No row may fall back to a tenant scan.
+This file records **actual 0.1.6 live results** and the **0.1.7 code corrections** that followed. It does not rewrite earlier confirmation (0.1.3 `investigate_ticket` `displayId` `is` remains in force).
 
-| Tool / feature | GraphQL | Attribute | Operator | Value shape | Expected | Safe failure | Fallback | PASS | Logs / provenance |
-|---|---|---|---|---|---|---|---|---|---|
-| investigate_ticket displayId | getTicketList | displayId | is | string `DDMMYY-NNNN` | exact ticket | n/a (already live) | includes only if `is` rejected | known ID returns complete; zero-match `not_found` | `resolution=displayId_condition_is` |
-| tickets_search status | getTicketList | status | includes | string array | filtered page | `unsupported_filter` | retry without sort only | Open tickets page, no page 2 | `filterAttributes` includes `status` |
-| tickets_search client | getTicketList | client.name | is | string | client tickets | `unsupported_filter` | none | known client name, exact | `filterAttributes=client.name` |
-| tickets_search site | getTicketList | site.name | is | string | site tickets | `unsupported_filter` | none | known site | `filterAttributes=site.name` |
-| tickets_search technician | getTicketList | technician.name | is | string | assigned tickets | `unsupported_filter` | none | known tech name | `filterAttributes=technician.name` |
-| tickets_search techGroup | getTicketList | techGroup.name | is | string | group tickets | `unsupported_filter` | none | known group | `filterAttributes=techGroup.name` |
-| tickets_search priority | getTicketList | priority | is | string | priority tickets | `unsupported_filter` | none | known priority | `filterAttributes=priority` |
-| tickets_search created today | getTicketList | createdTime | on | `placeholder.today` | today's tickets | `unsupported_filter` | none | today's tickets only | `filterAttributes=createdTime` |
-| tickets_search createdInLastDays | getTicketList | createdTime | inLast | `{unit:DAY,quantity:n}` | recent tickets | `unsupported_filter` | none | last n days | `filterAttributes=createdTime` |
-| tickets_search sort | getTicketList | createdTime / updatedTime | sort DESC/ASC | SortInput | newest first when DESC | warning `sort_unconfirmed` | retry without sort | order changes vs unsorted list | `sortAttribute` or null |
-| investigate_asset / assets_search hostName | getAssetList | hostName | is | string | unique asset | `unsupported_filter` or `ambiguous` | none | known hostname; duplicates fail | `resolution=hostName_condition_is` |
-| assets_search name | getAssetList | name | is | string | unique or list | `unsupported_filter` / `ambiguous` | none | exact name | `filterAttributes=name` |
-| assets_search serialNumber | getAssetList | serialNumber | is | string | unique asset | `unsupported_filter` | none | known serial | `filterAttributes=serialNumber` |
-| assets_search status | getAssetList | status | is | `ONLINE`/`OFFLINE` | filtered | `unsupported_filter` | none | online-only page | `filterAttributes=status` |
-| assets_search client/site | getAssetList | client.name / site.name | is | string | filtered | `unsupported_filter` | none | known client | `filterAttributes` |
-| assets_search unmonitored | getUnMonitoredAssetList | optional same | — | ListInfoInput | unmonitored page | `unsupported_filter` | none | query name in provenance | `searchKind=getUnMonitoredAssetList` |
-| assets_search sort | getAssetList | lastCommunicatedTime | DESC | SortInput | recent endpoints | `sort_unconfirmed` | retry without sort | order vs default | `sortAttribute` |
-| investigate_asset alerts | getAlertsForAsset | assetId | AssetDetailsListInput | `{assetId,listInfo}` | asset alerts | section `unavailable`; overall still `complete` if summary/activity/software/patches ok | none | alerts for that asset only; unavailable does not flip partial until live-confirmed | `alertFilter.query=getAlertsForAsset tenantScan=false` |
-| alerts_search assetId | getAlertsForAsset | assetId | same | same | asset alerts | `unsupported_filter` | **no** getAlertList | no getAlertList in logs | `searchKind=getAlertsForAsset` |
-| alerts_search status/severity | getAlertList or listInfo.condition | status / severity | is or includes | string / array | filtered page | `unsupported_filter` | none | page 1 only | `filterAttributes` |
-| alerts_search created | getAlertList | createdTime | on / inLast | placeholder or duration | recent alerts | `unsupported_filter` | none | today's or last n days | `filterAttributes=createdTime` |
-| alerts sort | listInfo.sort | createdTime | DESC | SortInput | newest first | unavailable / sort retry | none | order | `sortAttribute` |
-| investigate_client name | getClientList | name | is | string | unique client | `unsupported_filter` / `ambiguous` | none | exact name; duplicates or `hasMore` fail | `resolution=name_condition_is` |
-| investigate_client domain | getClientList | emailDomains | includes | `[domain]` | unique client | `unsupported_filter` | none | known domain | `resolution=emailDomains_condition_includes` |
-| investigate_client sites | getClientSiteList | clientId | official input | ID | that client's sites | `sites_unavailable` partial | none | sites match client | `getClientSiteList` + clientId |
-| investigate_client assets/tickets | getAssetList / getTicketList | client.name | is | string from client | bounded pages, then local `client.accountId` pin | section failed → partial | none (no invented `client.accountId` filter) | page 1; foreign/missing accountId rows omitted | `filterAttributes=client.name` + `droppedForeign` |
-| sites_search name | getClientSiteList | name | is | string | matching sites | `unsupported_filter` | none | exact name | `filterAttributes=name` |
-| getAssetSummary | getAssetSummary | assetId | get | AssetIdentifierInput | cpu/mem/disk | `summary_unavailable` partial | none | numeric health present | `logicalOperations` contains getAssetSummary |
-| getAssetActivity | getAssetActivity | assetId | list page 1 | AssetDetailsListInput | recent activity | `activity_unavailable` partial | none | bounded items, no activityData blob | `sections.activity` |
+Legend: **safe failure** is the MCP outcome when SuperOps rejects the candidate. No row may fall back to a tenant scan. **No `getAlertList` fallback** from asset-scoped alerts.
 
-Also re-check: Cursor MCP reconnect after tool-surface change; audit `success`/`outcome` with no customer content; no write tools; `includes` displayId fallback still unused.
+## LIVE-CONFIRMED (0.1.6 tenant evidence)
+
+| Tool / feature | GraphQL | Attribute | Operator | Result |
+|---|---|---|---|---|
+| investigate_ticket displayId | getTicketList | displayId | `is` | exact ticket; zero-match `not_found`. `includes` fallback unused |
+| tickets_search status | getTicketList | status | `includes` + array | Closed 559 / New 11. Tenant does not use `Open` |
+| tickets_search client | getTicketList | client.name | `is` | filtered |
+| tickets_search site | getTicketList | site.name | `is` | filtered |
+| tickets_search technician | getTicketList | technician.name | `is` | filtered |
+| tickets_search techGroup | getTicketList | techGroup.name | `is` | filtered |
+| tickets_search priority | getTicketList | priority | `is` | filtered |
+| tickets_search created | getTicketList | createdTime | `on` / `inLast` | filtered |
+| tickets_search updated | getTicketList | updatedTime | `on` | filtered |
+| tickets_search sort | getTicketList | createdTime / updatedTime | DESC | **order actually changes** |
+| assets_search / resolve identity | getAssetList | hostName / name / serialNumber / assetId / status | `is` | exact. name ≠ hostName independently |
+| assets_search client/site | getAssetList | client.name / site.name | `is` | filtered |
+| investigate_asset / alerts_search assetId | getAlertsForAsset | assetId + listInfo | — | accepted, asset-scoped, `createdTime DESC` accepted, `hasMore`/`totalCount` present, alerts belong to the requested asset. **No getAlertList** |
+| alerts_search without assetId | getAlertList | status / severity / createdTime | is / includes / on | filtered; `createdTime DESC` accepted |
+| investigate_client name | getClientList | name | `is` | unique client |
+| investigate_client domain | getClientList | emailDomains | `includes` | unique client |
+| investigate_client sites | getClientSiteList | clientId | official input | that client's sites |
+| sites get / search | getClientSite / getClientSiteList | name | `is` | works |
+| getAssetSummary | getAssetSummary | assetId | get | cpu/mem/disk present |
+| getAssetActivity | getAssetActivity | assetId | list page 1 | bounded items |
+| Identity lookups | list page 1 only | — | — | no tenant scans |
+| Opaque getAsset | getAsset | assetId | get | hostname-as-assetId stays `lookup_failed`, never `not_found` |
+
+## FAILED / UNSUPPORTED (0.1.6 tenant evidence)
+
+| Feature | Evidence | MCP contract after 0.1.7 |
+|---|---|---|
+| getAssetList `lastCommunicatedTime` DESC | Rejected consistently. `assets_search` used to retry without sort; `investigate_client` did not, so a valid `client.name` asset page became `partial` | **Do not send** that sort. Shared `queryGetAssetList` uses SuperOps default order. Retry-without-sort is not kept for a live-confirmed-unsupported sort |
+| getUnMonitoredAssetList | Rejected with **and** without sort | Public `unmonitored` argument remains, but returns `unsupported_filter` **without** calling SuperOps. Not faked by enumerating `getAssetList` |
+
+## STILL UNCONFIRMED
+
+| Item | Note |
+|---|---|
+| displayId `includes` fallback | Keep only if operator `is` is rejected. Do not change the confirmed `is` path |
+| Natural duplicate hostName / client-name uniqueness | `ambiguous` on page-1 `hasMore` or multiple exact matches is implemented; not naturally exercised live |
+| Live QNAP stderr audit privacy | Audit **code** allowlists metadata (`outcome`/`success`, no customer content). Live container stderr was not independently inspected in 0.1.6 |
+
+## 0.1.7 code corrections (need targeted QNAP revalidation)
+
+These preserve the 0.1.6 invariants above; they change MCP behavior where 0.1.6 evidence showed a defect.
+
+- `investigate_client` assets no longer send `lastCommunicatedTime` sort
+- `superops_assets_search` no longer sends or retries that sort
+- `getAlertsForAsset` is confirmed-class: query **failure** → `investigate_asset` **partial**; truncation remains **complete**; `alertFilter.rpmcLiveConfirmed=true`
+- JSON-scalar IDs above `Number.MAX_SAFE_INTEGER` are quoted at the HTTP parse boundary (post-`JSON.parse` `String()` cannot recover rounded digits)
+- Primitive `superops_alerts_list` omits structured `asset.owner.email` (same policy as aggregators). Freeform `message`/`description` are not general-purpose email redaction
+- Cursor tool catalog: server `tools/list` was already correct (24 tools). Full Cursor MCP reconnect remains required after deploy
+
+Also re-check after deploy: no write tools; no page 2; no `getAlertList` when `assetId` is set; `rpmc_status` version/commit; identity lookups stay page 1.

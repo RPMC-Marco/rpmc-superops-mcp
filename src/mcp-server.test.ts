@@ -398,4 +398,39 @@ describe("handlers", () => {
     expect(bodies.some((item) => item.includes("getAlertList"))).toBe(true);
     expect(bodies.some((item) => item.includes("getAlertsForAsset"))).toBe(false);
   });
+
+  it("omits structured owner.email from primitive superops_alerts_list", async () => {
+    const config = loadConfig(stdioEnv);
+    const client = new SuperOpsClient(
+      { apiToken: "t", subdomain: "d", region: "us" },
+      {
+        requestTimeoutMs: 1000,
+        maxReadRetries: 1,
+        maxRetryDurationMs: 1000,
+        fetchImpl: async () =>
+          new Response(
+            JSON.stringify({
+              data: {
+                getAlertList: {
+                  alerts: [
+                    {
+                      id: "a1",
+                      message: "Disk low; contact ops@client.com",
+                      asset: { assetId: "81307563136999424", owner: { name: "Jane", email: "jane@client.com" } },
+                    },
+                  ],
+                  listInfo: { page: 1, pageSize: 25, hasMore: false, totalCount: 1 },
+                },
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          ),
+      }
+    );
+    const result = await handleTool("superops_alerts_list", { page: 1 }, client, config);
+    const text = result.content[0]?.text ?? "";
+    expect(text).toContain("ops@client.com");
+    expect(text).toContain("81307563136999424");
+    expect(text).not.toContain("jane@client.com");
+  });
 });

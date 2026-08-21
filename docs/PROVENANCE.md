@@ -10,7 +10,8 @@ Classification used in this repository:
 
 | RPMC path | Source | Class | Notes |
 |---|---|---|---|
-| `src/superops/client.ts` | Computask `src/client.ts` @ 85b24ee | Substantially adapted | Removed Cloudflare execution-budget coupling. Added official 100 req/min limiter. Kept timeout, read retry, Retry-After parsing, error classes. |
+| `src/superops/client.ts` | Computask `src/client.ts` @ 85b24ee | Substantially adapted | Removed Cloudflare execution-budget coupling. Added official 100 req/min limiter. Kept timeout, read retry, Retry-After parsing, error classes. 0.1.7 parses response text with large-integer quoting instead of `Response.json()`. |
+| `src/superops/json-ids.ts` | RPMC | Independently implemented | Quote 16+ digit JSON integer tokens before `JSON.parse` so SuperOps IDs cannot silently round. |
 | `src/superops/errors.ts` | Computask `src/client.ts` @ 85b24ee | Substantially adapted | Same error types; no Worker budget fields. |
 | `src/superops/queries.ts` | Computask domain GraphQL documents @ 85b24ee | Substantially adapted | Scalar association fields; official `page`/`pageSize`; no `Ticket.description`. |
 | `src/superops/queries.ts` (shape check) | Servosity `queries.go` @ ce3f138 | Validation/reference only | Consulted for live field/shape confirmation. Not copied. |
