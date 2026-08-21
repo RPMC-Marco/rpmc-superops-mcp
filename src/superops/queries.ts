@@ -3,7 +3,8 @@
  *
  * Substantially adapted from computask/superops-mcp domain query strings
  * (Apache-2.0, commit 85b24ee9f203637b680858cd0abdd1bf5d303f9e).
- * Association fields are selected as leaves (official JSON scalars; Servosity #114).
+ * Association fields are selected as leaves (official JSON scalars; Servosity live
+ * finding #114 was consulted as validation/reference only, not copied).
  * Ticket.description is omitted (absent from the official Ticket type; original body is
  * documented as TicketConversationType.DESCRIPTION).
  * Pagination uses official page / pageSize / hasMore.

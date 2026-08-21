@@ -8,7 +8,7 @@ This is the next major step after the foundation correction pass. Aggregators (`
 ## Procedure (operator)
 
 1. Set `SUPEROPS_API_TOKEN`, `SUPEROPS_SUBDOMAIN`, `SUPEROPS_REGION` in a private env file on QNAP or a local machine. For HTTP, also set a ≥32-character `MCP_AUTH_TOKEN`. Do not commit it.
-2. Optional: `MCP_ALLOWED_ORIGINS` if a browser client will send an Origin header (LAN hostname or future Cloudflare Access hostname). Non-browser MCP clients that omit Origin do not need this.
+2. Optional: `MCP_ALLOWED_ORIGINS` / `MCP_ALLOWED_HOSTS` if a browser client will send an Origin header or the Host is not loopback (LAN hostname or future Cloudflare Access hostname). Non-browser MCP clients that omit Origin do not need Origins. `/mcp` always requires a valid Host.
 3. Start the container bound to loopback only for the first pass (`127.0.0.1:8080`).
 4. Authenticate to `/mcp` and call registered read tools only.
 5. Record actual response shapes in `docs/SUPEROPS-API-NOTES.md` under **RPMC live-confirmed**.

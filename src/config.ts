@@ -6,6 +6,8 @@
  * placeholder / empty-string stripping for environment credentials.
  */
 
+import { parseHostnameAllowlist } from "./http/hostnames.js";
+
 const CONFIG_PLACEHOLDER = /^\$\{.*\}$/;
 export const HTTP_AUTH_TOKEN_MIN_LENGTH = 32;
 
@@ -24,6 +26,7 @@ export interface AppConfig {
   httpPort: number;
   mcpAuthToken?: string;
   allowedOriginHostnames: string[];
+  allowedHostHostnames: string[];
   superopsApiToken: string;
   superopsSubdomain: string;
   superopsRegion: SuperOpsRegion;
@@ -58,22 +61,6 @@ function parsePositiveInt(name: string, value: string | undefined, fallback: num
   return parsed;
 }
 
-function parseOriginAllowlist(raw: string | undefined): string[] {
-  if (!raw?.trim()) return [];
-  return raw
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((value) => {
-      try {
-        const url = value.includes("://") ? new URL(value) : new URL(`http://${value}`);
-        return url.hostname;
-      } catch {
-        throw new Error(`MCP_ALLOWED_ORIGINS contains an invalid origin: ${value}`);
-      }
-    });
-}
-
 export function loadConfig(env: Record<string, string | undefined> = process.env): AppConfig {
   const transport = (cleanCredential(env.MCP_TRANSPORT) ?? "stdio") as string;
   if (transport !== "stdio" && transport !== "http") {
@@ -92,13 +79,16 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 
   const superopsApiToken = requireCredential("SUPEROPS_API_TOKEN", env.SUPEROPS_API_TOKEN);
   const superopsSubdomain = requireCredential("SUPEROPS_SUBDOMAIN", env.SUPEROPS_SUBDOMAIN);
+  const allowedOriginHostnames = parseHostnameAllowlist(env.MCP_ALLOWED_ORIGINS, "MCP_ALLOWED_ORIGINS");
+  const explicitHosts = parseHostnameAllowlist(env.MCP_ALLOWED_HOSTS, "MCP_ALLOWED_HOSTS");
 
   return {
     transport,
     httpHost: cleanCredential(env.MCP_HTTP_HOST) ?? "0.0.0.0",
     httpPort: parsePositiveInt("MCP_HTTP_PORT", env.MCP_HTTP_PORT, 8080),
     mcpAuthToken,
-    allowedOriginHostnames: parseOriginAllowlist(env.MCP_ALLOWED_ORIGINS),
+    allowedOriginHostnames,
+    allowedHostHostnames: explicitHosts.length > 0 ? explicitHosts : allowedOriginHostnames,
     superopsApiToken,
     superopsSubdomain,
     superopsRegion: parseRegion(env.SUPEROPS_REGION),

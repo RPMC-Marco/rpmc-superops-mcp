@@ -12,8 +12,9 @@ export interface SanitizedOutput {
 }
 
 const RICH_TEXT_KEYS = new Set(["content"]);
-const MAX_DEPTH = 12;
+export const MAX_OUTPUT_DEPTH = 12;
 const MAX_STRING = 8000;
+export const DEPTH_OMITTED = "[omitted: max depth]";
 
 function walk(
   value: unknown,
@@ -21,7 +22,10 @@ function walk(
   depth: number,
   notice: PrivacyNotice
 ): unknown {
-  if (depth > MAX_DEPTH) return value;
+  if (depth > MAX_OUTPUT_DEPTH) {
+    notice.truncated = true;
+    return DEPTH_OMITTED;
+  }
   if (typeof value === "string") {
     if (key && RICH_TEXT_KEYS.has(key)) {
       const rich = sanitizeTicketText(value, MAX_STRING);
@@ -69,4 +73,18 @@ export function sanitizeOutput(value: unknown): SanitizedOutput {
     };
   }
   return { payload: { data: sanitized, _privacy: privacy }, privacy };
+}
+
+export function sanitizeErrorText(value: string, maxChars = 400): string {
+  const redacted = redactSecrets(value.replace(/\r\n/g, "\n"));
+  const withoutStack = redacted.text
+    .split("\n")
+    .filter((line) => !/^\s*at\s+\S/.test(line))
+    .join("\n")
+    .trim();
+  const text = withoutStack || "tool failed";
+  if (text.length > maxChars) {
+    return `${text.slice(0, maxChars - 3)}...`;
+  }
+  return text;
 }

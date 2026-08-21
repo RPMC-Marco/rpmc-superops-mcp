@@ -37,6 +37,17 @@ describe("config", () => {
   it("parses allowed Origin hostnames for future tunnel deployment", () => {
     const config = loadConfig({ ...httpEnv, MCP_ALLOWED_ORIGINS: "https://mcp.example,192.168.1.10" });
     expect(config.allowedOriginHostnames).toEqual(["mcp.example", "192.168.1.10"]);
+    expect(config.allowedHostHostnames).toEqual(["mcp.example", "192.168.1.10"]);
+  });
+
+  it("parses MCP_ALLOWED_HOSTS independently when set", () => {
+    const config = loadConfig({
+      ...httpEnv,
+      MCP_ALLOWED_ORIGINS: "https://mcp.example",
+      MCP_ALLOWED_HOSTS: "nas.lan",
+    });
+    expect(config.allowedOriginHostnames).toEqual(["mcp.example"]);
+    expect(config.allowedHostHostnames).toEqual(["nas.lan"]);
   });
 });
 

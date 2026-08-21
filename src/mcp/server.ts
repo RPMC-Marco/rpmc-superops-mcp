@@ -38,7 +38,7 @@ export function createMcpServer(config: AppConfig, client: SuperOpsClient): McpS
           classification: capability.classification,
           success: !result.isError,
           durationMs: Date.now() - started,
-          errorSummary: result.isError ? result.content[0]?.text : undefined,
+          errorSummary: result.isError ? result.auditDetail ?? result.content[0]?.text : undefined,
           metadata: { argumentKeys: Object.keys(record).slice(0, 20) },
         });
         return {

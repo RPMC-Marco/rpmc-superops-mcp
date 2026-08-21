@@ -1,34 +1,15 @@
 /**
- * Origin policy for Streamable HTTP (DNS-rebinding mitigation).
+ * Origin and Host policy for Streamable HTTP (DNS-rebinding mitigation).
  *
- * Missing Origin is allowed (non-browser MCP clients).
- * Present Origin must match configured hostnames, or loopback when unset.
+ * Uses MCP SDK v2 `validateOriginHeader` / `validateHostHeader` for the actual
+ * checks. RPMC owns allowlist parsing, IPv6 dual-form normalization, and the
+ * HTTP 403 envelope so we do not echo header values to clients.
+ *
  * This is not a substitute for Bearer MCP authentication.
  */
 
-const DEFAULT_LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]", "::1"];
-
-export function parseOriginAllowlist(raw: string | undefined): string[] {
-  if (!raw?.trim()) return [];
-  return raw
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map(toHostname);
-}
-
-function toHostname(value: string): string {
-  try {
-    const url = value.includes("://") ? new URL(value) : new URL(`http://${value}`);
-    return url.hostname;
-  } catch {
-    return value.toLowerCase();
-  }
-}
-
-export function effectiveOriginHostnames(configured: string[]): string[] {
-  return configured.length > 0 ? configured : DEFAULT_LOOPBACK_HOSTS;
-}
+import { validateHostHeader, validateOriginHeader } from "@modelcontextprotocol/server";
+import { effectiveHostnameAllowlist } from "./hostnames.js";
 
 export function evaluateOrigin(
   originHeader: string | string[] | undefined,
@@ -37,27 +18,25 @@ export function evaluateOrigin(
   if (Array.isArray(originHeader)) {
     return { allowed: false, reason: "multiple Origin headers" };
   }
-  if (!originHeader || originHeader.trim() === "") {
-    return { allowed: true, reason: "origin omitted" };
+  const allowlist = effectiveHostnameAllowlist(configuredHostnames);
+  const result = validateOriginHeader(originHeader ?? "", allowlist);
+  if (result.ok) {
+    return { allowed: true, reason: originHeader ? "origin allowed" : "origin omitted" };
   }
-  const raw = originHeader.trim();
-  if (raw === "null") {
-    return { allowed: false, reason: "null origin" };
-  }
-  let hostname: string;
-  try {
-    hostname = new URL(raw).hostname;
-  } catch {
-    return { allowed: false, reason: "unparseable origin" };
-  }
-  const allowed = new Set(effectiveOriginHostnames(configuredHostnames).map((host) => host.toLowerCase()));
-  if (allowed.has(hostname.toLowerCase()) || allowed.has(`[${hostname.toLowerCase()}]`)) {
-    return { allowed: true, reason: "origin allowed" };
-  }
-  return { allowed: false, reason: "origin not allowed" };
+  return { allowed: false, reason: result.errorCode };
 }
 
-export function headerValue(value: string | string[] | undefined): string | undefined {
-  if (Array.isArray(value)) return value[0];
-  return value;
+export function evaluateHost(
+  hostHeader: string | string[] | undefined,
+  configuredHostnames: string[]
+): { allowed: boolean; reason: string } {
+  if (Array.isArray(hostHeader)) {
+    return { allowed: false, reason: "multiple Host headers" };
+  }
+  const allowlist = effectiveHostnameAllowlist(configuredHostnames);
+  const result = validateHostHeader(hostHeader, allowlist);
+  if (result.ok) {
+    return { allowed: true, reason: "host allowed" };
+  }
+  return { allowed: false, reason: result.errorCode };
 }

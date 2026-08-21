@@ -5,7 +5,7 @@ import type { AppConfig } from "../config.js";
 import { createMcpServer } from "../mcp/server.js";
 import type { SuperOpsClient } from "../superops/client.js";
 import { closeQuietly, safeHttpErrorMessage } from "./lifecycle.js";
-import { evaluateOrigin } from "./origin.js";
+import { evaluateHost, evaluateOrigin } from "./origin.js";
 
 export interface Closable {
   close(): Promise<void>;
@@ -39,6 +39,12 @@ export async function handleMcpHttpRequest(
 ): Promise<void> {
   if (!authorizeMcpRequest(req.headers, config.mcpAuthToken)) {
     json(res, 401, { error: "unauthorized" });
+    return;
+  }
+
+  const host = evaluateHost(req.headers.host, config.allowedHostHostnames);
+  if (!host.allowed) {
+    json(res, 403, { error: "host not allowed" });
     return;
   }
 

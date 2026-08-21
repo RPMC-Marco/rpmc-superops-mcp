@@ -2,12 +2,14 @@ import type { AppConfig } from "../config.js";
 import type { SuperOpsClient } from "../superops/client.js";
 import { clampPageSize } from "../superops/limiter.js";
 import * as Q from "../superops/queries.js";
+import { auditErrorSummary, toClientSafeError } from "../privacy/errors.js";
 import { attachmentMetadata, sanitizeTicketText } from "../privacy/redact.js";
-import { sanitizeOutput } from "../privacy/safe-output.js";
+import { sanitizeErrorText, sanitizeOutput } from "../privacy/safe-output.js";
 
 export interface ToolResult {
   content: Array<{ type: "text"; text: string }>;
   isError?: boolean;
+  auditDetail?: string;
 }
 
 export function jsonResult(payload: unknown): ToolResult {
@@ -16,7 +18,7 @@ export function jsonResult(payload: unknown): ToolResult {
 }
 
 export function errorResult(message: string): ToolResult {
-  return { content: [{ type: "text", text: `Error: ${message}` }], isError: true };
+  return { content: [{ type: "text", text: `Error: ${sanitizeErrorText(message)}` }], isError: true };
 }
 
 function pageInput(args: Record<string, unknown>, defaultSize = 25) {
@@ -162,7 +164,10 @@ export async function handleTool(
         return errorResult(`Unknown or unregistered tool: ${name}`);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "tool failed";
-    return errorResult(message);
+    const clientMessage = toClientSafeError(error);
+    return {
+      ...errorResult(clientMessage),
+      auditDetail: auditErrorSummary(error, clientMessage),
+    };
   }
 }

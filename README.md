@@ -15,7 +15,7 @@ Phase 1: authenticated, read-only, Docker on QNAP (LAN). Write tools are not reg
 - HTTP MCP callers must send `Authorization: Bearer <MCP_AUTH_TOKEN>` (`MCP_AUTH_TOKEN` ≥ 32 characters)
 - stdio does not require `MCP_AUTH_TOKEN`
 
-See [docs/MCP-SDK.md](docs/MCP-SDK.md) for Origin policy and the v2 decision.
+See [docs/MCP-SDK.md](docs/MCP-SDK.md) for Host/Origin policy and the v2 decision.
 
 ## Quick start (development)
 
@@ -42,7 +42,7 @@ Accept: application/json, text/event-stream
 
 HTTP is stateless (fresh MCP server per request) so it works behind a future Cloudflare Access/Tunnel hop without sticky sessions. `/health` is unauthenticated for Docker HEALTHCHECK and does not expose tokens or ticket content.
 
-If a browser client will send `Origin`, set `MCP_ALLOWED_ORIGINS` to that hostname. Non-browser clients that omit `Origin` continue to work.
+If a browser client will send `Origin`, set `MCP_ALLOWED_ORIGINS`. For LAN QNAP or a future tunnel hostname, set `MCP_ALLOWED_HOSTS` (or set Origins and let Host reuse that list). Non-browser clients that omit `Origin` continue to work; a present `Host` is always required on `/mcp`.
 
 ## Docker
 
