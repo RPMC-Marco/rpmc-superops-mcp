@@ -36,12 +36,11 @@ Record pass/fail, actual field names, and a short redacted sample (no secrets, n
 - Assets / software / patches
 - Pagination: `page`, `pageSize`, `hasMore`; page size 100
 - Ticket↔asset relationship if any field appears in live payloads (not in official Ticket type)
-- Status filtering/operator: **do not enable in the public schema yet**. If a one-off private probe is needed, try official `includes` + array vs community `is` against a known status, record the result, then decide
-- Missing `CustomerSubDomain` behaviour (expect failure; do not leave it off in production)
-- Rate-limit error shape if safely reachable with read-only traffic
+- Status filtering on **`superops_tickets_list` remains omitted**. Status lives only on constrained `superops_tickets_search` (`includes` + array) pending live confirmation
+- Execute every row in `docs/LIVE-CONFIRMATION-MATRIX.md` in this single pass
 - Privacy: human-entered fields should keep technical evidence; credential-like strings should be `[redacted]` with `_privacy` or per-field `redaction`. Freeform bodies are **not** general-purpose email redaction
 - `investigate_ticket` (already live-confirmed): spot-check `displayId` `is`, zero-match `not_found`, stderr audit `outcome`/`success` without customer content
-- `investigate_asset` (pending): internal `assetId` happy path; reject hostName/name/serial without scanning; `getAlertsForAsset` page 1 only (no `getAlertList`); software/patch bounds; `requester.email` omitted; stderr audit
+- Search/aggregators: no page 2, no `getAlertList` when `assetId` is set, `ambiguous` never auto-picked, `unsupported_filter` on rejected conditions
 
 ## Out of scope for this live pass
 

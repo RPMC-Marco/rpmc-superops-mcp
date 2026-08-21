@@ -93,17 +93,25 @@ If the encoded date and SuperOps `createdTime` ever disagree, treat **`createdTi
 
 ### Asset identifiers
 
-Official `getAsset` requires `AssetIdentifierInput.assetId`. Asset `name`, `hostName`, and `serialNumber` are documented **response** fields on `Asset`. Official field notes do **not** say those attributes can be used in `ListInfoInput.condition` (unlike some Ticket JSON associations that explicitly say a nested field “can be used in the filter condition”).
+Official `getAsset` requires `AssetIdentifierInput.assetId` (numeric ID). Help Center documents string operator `is` for ListInfoInput attribute paths. Asset `name`, `hostName`, and `serialNumber` are official String fields, so exact `is` lookups are implemented as **documented candidates** (page 1, size 5, local exact match, `ambiguous` if duplicates). They are **not** RPMC live-confirmed yet. `contains` / fuzzy matching is not used. A hostname must be passed as `hostName`, not stuffed into `assetId`.
 
-`investigate_asset` therefore requires the internal numeric `assetId`. Human identifiers are rejected as `human_lookup_unconfirmed` rather than guessed or tenant-scanned. Confirming a server-side name/hostName/serialNumber `is` filter is a later live-validation item if SuperOps documents it.
+### Client identifiers
+
+`Client.name` is an official String field. `emailDomains` is `[String]`; Help Center `includes` takes an array for multi-valued attributes. `getClient` remains the accountId path. Exact name / domain resolution is implemented, not live-confirmed.
+
+### Sites
+
+Official `getClientSite` / `getClientSiteList`. `GetClientSiteListInput.clientId` is documented for client-scoped sites (used by `investigate_client` and optional `superops_sites_list`). Site `name` `is` is a Help Center string-operator candidate.
 
 ### Alerts for one asset
 
 Official MSP docs include `getAlertsForAsset(input: AssetDetailsListInput!)` — “Fetches the list of alerts of an asset.” That is the documented asset-scoped query (same input type as software/patches: `assetId` + `listInfo`). RPMC live-confirmed that `Alert.asset.assetId` exists on alert payloads; **`getAlertsForAsset` itself is not yet RPMC live-confirmed**.
 
-`investigate_asset` uses a single page of `getAlertsForAsset` (page 1, pageSize 25). It does **not** call tenant-wide `getAlertList` and does not walk pages. Optional `listInfo.sort` of `createdTime DESC` is documented `SortInput` generally; whether Alert accepts that attribute is unconfirmed and is retried without sort if rejected.
+`investigate_asset` uses a single page of `getAlertsForAsset` (page 1, pageSize 25). `superops_alerts_search` with `assetId` uses the same query. Tenant-wide `getAlertList` is used only when searching alerts **without** an assetId, still one page, with explicit filters. Optional `createdTime DESC` sort is documented `SortInput` generally; whether a given list accepts that attribute is unconfirmed and is retried without sort if rejected.
 
-Do not implement a public probe-only alert-filter tool.
+Constrained ticket/asset/alert search tools never walk additional pages. Rejected filters return `unsupported_filter`.
+
+See `docs/READ-SURFACE.md` and `docs/LIVE-CONFIRMATION-MATRIX.md`.
 
 ### Audit logs
 

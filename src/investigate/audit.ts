@@ -81,5 +81,10 @@ export function investigationAuditFromResult(result: Record<string, unknown>): I
   const candidates = asArray(result.candidates);
   if (candidates.length) metadata.candidateCount = candidates.length;
 
+  const filterAttributes = asArray(provenance.filterAttributes).filter((item) => typeof item === "string");
+  if (filterAttributes.length) metadata.filterAttributes = filterAttributes;
+  if (typeof provenance.query === "string") metadata.searchKind = provenance.query;
+  if (typeof provenance.sortAttribute === "string") metadata.sortAttribute = provenance.sortAttribute;
+
   return { outcome, errorCode, metadata };
 }

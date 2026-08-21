@@ -3,7 +3,8 @@ import { SuperOpsError, SuperOpsMalformedResponseError } from "../superops/error
 import * as Q from "../superops/queries.js";
 import { toClientSafeError } from "../privacy/errors.js";
 import { sanitizeTicketText } from "../privacy/redact.js";
-import { classifyAssetRef } from "./asset-ref.js";
+import { resolveAsset } from "./resolve-asset.js";
+import { exclusiveStringIdentity } from "../superops/conditions.js";
 import {
   ALERT_ITEM_LIMIT,
   ALERT_PAGE_SIZE,
@@ -27,10 +28,12 @@ import {
   type InvestigateStatus,
 } from "../investigate/common.js";
 
-export type AssetResolutionMethod = "assetId_direct" | "unresolved";
+export type AssetResolutionMethod = string;
 
 interface SectionState {
   asset: "ok" | "failed";
+  summary: "ok" | "failed";
+  activity: "ok" | "failed" | "truncated";
   software: "ok" | "failed" | "truncated";
   patches: "ok" | "failed" | "truncated";
   alerts: "ok" | "failed" | "truncated" | "unavailable";
@@ -44,6 +47,7 @@ function failedResult(input: {
   resolution: AssetResolutionMethod;
   logicalOperations: string[];
   upstreamFailureCategory?: string;
+  candidates?: Array<Record<string, unknown>>;
 }): Record<string, unknown> {
   return {
     status: "failed" as InvestigateStatus,
@@ -51,6 +55,7 @@ function failedResult(input: {
     message: input.message,
     warnings: [],
     errors: [{ code: input.code, message: input.message }],
+    candidates: input.candidates,
     provenance: {
       supplied: { assetId: input.suppliedAssetId },
       classifiedAs: input.classifiedAs,
@@ -58,6 +63,8 @@ function failedResult(input: {
       assetId: null,
       sections: {
         asset: "failed",
+        summary: "failed",
+        activity: "failed",
         software: "failed",
         patches: "failed",
         alerts: "unavailable",
@@ -157,44 +164,49 @@ async function loadAssetAlerts(
 }
 
 export async function investigateAsset(
-  args: { assetId?: unknown },
+  args: { assetId?: unknown; hostName?: unknown; name?: unknown; serialNumber?: unknown },
   client: SuperOpsClient
 ): Promise<Record<string, unknown>> {
-  const classified = classifyAssetRef(args.assetId);
+  const identity = exclusiveStringIdentity(args as Record<string, unknown>, ["assetId", "hostName", "name", "serialNumber"]);
   const logicalOperations: string[] = [];
   const warnings: InvestigateNotice[] = [];
   const errors: InvestigateNotice[] = [];
   const sections: SectionState = {
     asset: "failed",
+    summary: "failed",
+    activity: "failed",
     software: "failed",
     patches: "failed",
     alerts: "unavailable",
   };
 
-  if (classified.kind === "malformed") {
+  if (!identity.ok) {
     return failedResult({
-      suppliedAssetId: classified.value,
+      suppliedAssetId: "",
       classifiedAs: "malformed",
-      code: "malformed_asset",
-      message: "assetId must be a SuperOps internal assetId (numeric ID)",
+      code: identity.code,
+      message: identity.message,
       resolution: "unresolved",
       logicalOperations,
     });
   }
 
-  if (classified.kind === "unsupported_human") {
+  const resolved = await resolveAsset(client, identity);
+  logicalOperations.push(...resolved.logicalOperations);
+  if (!resolved.ok) {
     return failedResult({
-      suppliedAssetId: classified.value,
-      classifiedAs: "unsupported_human",
-      code: "human_lookup_unconfirmed",
-      message:
-        "Name, hostName, and serialNumber are documented Asset fields but are not documented as server-side filter attributes. investigate_asset currently requires the internal assetId. Do not tenant-scan for a human identifier.",
-      resolution: "unresolved",
+      suppliedAssetId: identity.value,
+      classifiedAs: identity.key,
+      code: resolved.code,
+      message: resolved.message,
+      resolution: resolved.method === "unresolved" ? "unresolved" : (resolved.method as AssetResolutionMethod),
       logicalOperations,
+      upstreamFailureCategory: resolved.upstreamFailureCategory,
+      candidates: resolved.candidates,
     });
   }
 
-  const assetId = classified.value;
+  const assetId = resolved.assetId;
   let detail: Record<string, unknown>;
   try {
     logicalOperations.push("getAsset");
@@ -207,13 +219,52 @@ export async function investigateAsset(
   } catch (error) {
     return failedResult({
       suppliedAssetId: assetId,
-      classifiedAs: "assetId",
+      classifiedAs: identity.key,
       code: failureCode(error),
       message: toClientSafeError(error),
-      resolution: "assetId_direct",
+      resolution: resolved.method,
       logicalOperations,
       upstreamFailureCategory: upstreamFailureCategory(error),
     });
+  }
+
+  let summary: unknown = null;
+  try {
+    logicalOperations.push("getAssetSummary");
+    const data = asRecord(await client.query(Q.GET_ASSET_SUMMARY, { input: { assetId } }));
+    summary = asRecord(data.getAssetSummary);
+    sections.summary = "ok";
+  } catch (error) {
+    sections.summary = "failed";
+    errors.push(noticeFromError("summary_unavailable", error));
+  }
+
+  let activity: Record<string, unknown> | null = null;
+  try {
+    logicalOperations.push("getAssetActivity");
+    const data = asRecord(
+      await client.query(Q.GET_ASSET_ACTIVITY, {
+        input: { assetId, listInfo: { page: 1, pageSize: 15 } },
+      })
+    );
+    const payload = asRecord(data.getAssetActivity);
+    const listInfo = asRecord(payload.listInfo);
+    const items = asArray(payload.activities).map((item) => {
+      const rec = asRecord(item);
+      return {
+        activityId: rec.activityId,
+        module: rec.module,
+        activityType: rec.activityType,
+        createdTime: rec.createdTime,
+        createdBy: omitStructuredEmail(rec.createdBy),
+      };
+    });
+    const truncated = listInfo.hasMore === true || items.length > 15;
+    sections.activity = truncated ? "truncated" : "ok";
+    activity = { items: items.slice(0, 15), returned: Math.min(items.length, 15), totalCount: listInfo.totalCount ?? items.length, hasMore: listInfo.hasMore === true, truncated, limit: 15 };
+  } catch (error) {
+    sections.activity = "failed";
+    errors.push(noticeFromError("activity_unavailable", error));
   }
 
   let software: ReturnType<typeof boundSoftware> | null = null;
@@ -300,7 +351,9 @@ export async function investigateAsset(
     };
   }
 
-  const supportingFailed = [sections.software, sections.patches].some((section) => section === "failed");
+  const supportingFailed = [sections.summary, sections.activity, sections.software, sections.patches].some(
+    (section) => section === "failed"
+  );
   const status: InvestigateStatus = supportingFailed ? "partial" : "complete";
 
   return {
@@ -327,21 +380,24 @@ export async function investigateAsset(
       model: detail.model,
       detail,
     },
+    summary,
+    activity,
     software,
     patches,
     alerts,
     warnings,
     errors,
     provenance: {
-      supplied: { assetId },
-      classifiedAs: "assetId",
-      resolution: "assetId_direct",
+      supplied: { [identity.key]: identity.value },
+      classifiedAs: identity.key,
+      resolution: resolved.method,
       assetId: detail.assetId,
       sections,
       truncated: {
         software: sections.software === "truncated",
         patches: sections.patches === "truncated",
         alerts: sections.alerts === "truncated",
+        activity: sections.activity === "truncated",
       },
       logicalOperations,
       assetLookup: { method: "getAsset", documented: true },

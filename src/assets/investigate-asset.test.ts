@@ -10,7 +10,13 @@ type QueryHandler = (query: string, variables?: Record<string, unknown>) => unkn
 
 function fakeClient(handler: QueryHandler): SuperOpsClient {
   return {
-    query: async (query: string, variables?: Record<string, unknown>) => handler(query, variables),
+    query: async (query: string, variables?: Record<string, unknown>) => {
+      if (query.includes("getAssetSummary")) return { getAssetSummary: { cpu: { cpuName: "Intel" } } };
+      if (query.includes("getAssetActivity")) {
+        return { getAssetActivity: { activities: [], listInfo: { page: 1, pageSize: 15, hasMore: false, totalCount: 0 } } };
+      }
+      return handler(query, variables);
+    },
   } as SuperOpsClient;
 }
 
@@ -132,13 +138,13 @@ describe("investigateAsset", () => {
     });
   });
 
-  it("returns human_lookup_unconfirmed without SuperOps calls", async () => {
+  it("returns malformed_input for a hostname stuffed into assetId", async () => {
     const client = fakeClient(() => {
       throw new Error("no SuperOps");
     });
     const result = await investigateAsset({ assetId: "DESKTOP-9J8RLGD" }, client);
     expect(result.status).toBe("failed");
-    expect(result.code).toBe("human_lookup_unconfirmed");
+    expect(result.code).toBe("malformed_input");
     expect((result.provenance as { resolution: string }).resolution).toBe("unresolved");
   });
 
@@ -147,7 +153,7 @@ describe("investigateAsset", () => {
       throw new Error("no SuperOps");
     }));
     expect(result.status).toBe("failed");
-    expect(result.code).toBe("malformed_asset");
+    expect(result.code).toBe("malformed_input");
   });
 
   it("maps opaque getAsset failure to lookup_failed, not not_found", async () => {
@@ -288,13 +294,65 @@ describe("investigateAsset", () => {
     expect((result.provenance as { sections: { alerts: string } }).sections.alerts).toBe("unavailable");
   });
 
-  it("does not guess among human identifiers", async () => {
+  it("does not guess among human identifiers stuffed into assetId", async () => {
     const result = await investigateAsset({ assetId: "Acme Laptop" }, fakeClient(() => {
       throw new Error("no SuperOps");
     }));
     expect(result.status).toBe("failed");
-    expect(result.code).toBe("human_lookup_unconfirmed");
+    expect(result.code).toBe("malformed_input");
     expect(result.candidates).toBeUndefined();
+  });
+
+  it("resolves hostName with operator is, page 1 only, and exact local match", async () => {
+    const calls: Array<{ query: string; variables?: Record<string, unknown> }> = [];
+    const client = fakeClient((query, variables) => {
+      calls.push({ query, variables });
+      if (query.includes("getAssetList")) {
+        return {
+          getAssetList: {
+            assets: [
+              { assetId: ASSET_ID, hostName: "DESKTOP-9J8RLGD", name: "FRONT-DESK-PC" },
+              { assetId: "other", hostName: "DESKTOP-OTHER", name: "Other" },
+            ],
+            listInfo: { page: 1, pageSize: 5, hasMore: false, totalCount: 2 },
+          },
+        };
+      }
+      if (query.includes("query getAsset(")) return assetGet();
+      if (query.includes("getAssetSoftwareList")) return { getAssetSoftwareList: emptySupport().getAssetSoftwareList };
+      if (query.includes("getAssetPatchDetails")) return { getAssetPatchDetails: emptySupport().getAssetPatchDetails };
+      if (query.includes("getAlertsForAsset")) return { getAlertsForAsset: emptySupport().getAlertsForAsset };
+      throw new Error(`unexpected ${query.slice(0, 40)}`);
+    });
+    const result = await investigateAsset({ hostName: "DESKTOP-9J8RLGD" }, client);
+    expect(result.status).toBe("complete");
+    expect((result.provenance as { resolution: string }).resolution).toBe("hostName_condition_is");
+    const listInput = (calls.find((call) => call.query.includes("getAssetList"))?.variables as { input: Record<string, unknown> }).input;
+    expect(listInput.page).toBe(1);
+    expect(listInput.condition).toEqual({ attribute: "hostName", operator: "is", value: "DESKTOP-9J8RLGD" });
+    expect(calls.filter((call) => call.query.includes("getAssetList"))).toHaveLength(1);
+    expect(JSON.stringify(calls.map((call) => call.variables))).not.toMatch(/"page":\s*2/);
+  });
+
+  it("returns ambiguous when two assets share the same hostName", async () => {
+    const client = fakeClient((query) => {
+      if (query.includes("getAssetList")) {
+        return {
+          getAssetList: {
+            assets: [
+              { assetId: "a1", hostName: "DESKTOP-9J8RLGD" },
+              { assetId: "a2", hostName: "DESKTOP-9J8RLGD" },
+            ],
+            listInfo: { page: 1, pageSize: 5, hasMore: false, totalCount: 2 },
+          },
+        };
+      }
+      throw new Error("must not getAsset");
+    });
+    const result = await investigateAsset({ hostName: "DESKTOP-9J8RLGD" }, client);
+    expect(result.status).toBe("failed");
+    expect(result.code).toBe("ambiguous");
+    expect((result.candidates as unknown[]).length).toBe(2);
   });
 
   it("emits privacy-safe audit metadata for the complete path", async () => {

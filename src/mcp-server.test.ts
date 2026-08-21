@@ -65,6 +65,14 @@ describe("mcp server tools/list", () => {
     expect(JSON.stringify(ticketsList?.inputSchema)).not.toMatch(/status/);
   });
 
+  it("does not expose raw RuleConditionInput or arbitrary GraphQL", () => {
+    for (const tool of listMcpTools()) {
+      const schema = JSON.stringify(tool.inputSchema);
+      expect(schema, tool.name).not.toMatch(/RuleConditionInput/);
+      expect(schema, tool.name).not.toMatch(/mutation/);
+    }
+  });
+
   it("registers investigate_ticket with ticket and optional assetId only", () => {
     const tool = listMcpTools().find((item) => item.name === "investigate_ticket");
     expect(tool).toBeDefined();
@@ -75,14 +83,14 @@ describe("mcp server tools/list", () => {
     expect(schema).not.toMatch(/createdTime/);
   });
 
-  it("registers investigate_asset with assetId only", () => {
+  it("registers investigate_asset with explicit identity fields only", () => {
     const tool = listMcpTools().find((item) => item.name === "investigate_asset");
     expect(tool).toBeDefined();
     const schema = JSON.stringify(tool?.inputSchema);
     expect(schema).toMatch(/assetId/);
-    expect(schema).not.toMatch(/hostName/);
-    expect(schema).not.toMatch(/serialNumber/);
-    expect(schema).not.toMatch(/status/);
+    expect(schema).toMatch(/hostName/);
+    expect(schema).toMatch(/serialNumber/);
+    expect(schema).not.toMatch(/createdTime/);
   });
 });
 
@@ -329,6 +337,20 @@ describe("handlers", () => {
               status: 200,
               headers: { "Content-Type": "application/json" },
             });
+          }
+          if (body.includes("getAssetSummary")) {
+            return new Response(JSON.stringify({ data: { getAssetSummary: { cpu: { cpuName: "x" } } } }), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          if (body.includes("getAssetActivity")) {
+            return new Response(
+              JSON.stringify({
+                data: { getAssetActivity: { activities: [], listInfo: { page: 1, pageSize: 15, hasMore: false, totalCount: 0 } } },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } }
+            );
           }
           if (body.includes("getAssetSoftwareList")) {
             return new Response(

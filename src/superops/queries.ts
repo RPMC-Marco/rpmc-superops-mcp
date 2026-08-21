@@ -161,6 +161,9 @@ query getAssetList($input: ListInfoInput!) {
       lastCommunicatedTime
       patchStatus
       deviceCategory
+      hostName
+      serialNumber
+      agentVersion
     }
     ${LIST_INFO}
   }
@@ -270,6 +273,131 @@ query getAlertsForAsset($input: AssetDetailsListInput!) {
 }
 `;
 
+export const GET_ASSET_SUMMARY = `
+query getAssetSummary($input: AssetIdentifierInput!) {
+  getAssetSummary(input: $input) {
+    cpu {
+      cpuName
+      physicalCore
+      logicalCore
+      architecture
+      processCount
+      cpuUsage
+    }
+    memory {
+      totalMemory
+      usedMemory
+      availableMemory
+      memoryUsage
+    }
+    disk {
+      totalFreeSpace
+      totalSize
+      disks {
+        drive
+        discType
+        fileSystem
+        size
+        freeSize
+        driveUsage
+      }
+    }
+    assetInterface {
+      name
+      mac
+      ipv4Address
+      ipv6Address
+      connectType
+      adapterName
+    }
+    lastUserLog {
+      id
+      name
+      lastLoginTime
+    }
+  }
+}
+`;
+
+export const GET_ASSET_ACTIVITY = `
+query getAssetActivity($input: AssetDetailsListInput!) {
+  getAssetActivity(input: $input) {
+    activities {
+      activityId
+      module
+      activityType
+      createdTime
+      createdBy
+    }
+    ${LIST_INFO}
+  }
+}
+`;
+
+export const GET_UNMONITORED_ASSET_LIST = `
+query getUnMonitoredAssetList($input: ListInfoInput!) {
+  getUnMonitoredAssetList(input: $input) {
+    assets {
+      assetId
+      name
+      assetClass
+      client
+      site
+      status
+      platform
+      lastCommunicatedTime
+      patchStatus
+      deviceCategory
+      hostName
+      serialNumber
+    }
+    ${LIST_INFO}
+  }
+}
+`;
+
+export const GET_CLIENT_SITE = `
+query getClientSite($input: ClientSiteIdentifierInput!) {
+  getClientSite(input: $input) {
+    id
+    name
+    timezoneCode
+    working24x7
+    line1
+    line2
+    line3
+    city
+    postalCode
+    countryCode
+    stateCode
+    contactNumber
+    client
+    hq
+  }
+}
+`;
+
+export const GET_CLIENT_SITE_LIST = `
+query getClientSiteList($input: GetClientSiteListInput!) {
+  getClientSiteList(input: $input) {
+    sites {
+      id
+      name
+      timezoneCode
+      working24x7
+      city
+      postalCode
+      countryCode
+      stateCode
+      contactNumber
+      client
+      hq
+    }
+    ${LIST_INFO}
+  }
+}
+`;
+
 export const GET_TECHNICIAN_LIST = `
 query getTechnicianList($input: ListInfoInput!) {
   getTechnicianList(input: $input) {
@@ -310,6 +438,11 @@ export const ALL_QUERY_DOCUMENTS = [
   GET_ASSET_PATCH_DETAILS,
   GET_ALERT_LIST,
   GET_ALERTS_FOR_ASSET,
+  GET_ASSET_SUMMARY,
+  GET_ASSET_ACTIVITY,
+  GET_UNMONITORED_ASSET_LIST,
+  GET_CLIENT_SITE,
+  GET_CLIENT_SITE_LIST,
   GET_TECHNICIAN_LIST,
   GET_TECHNICIAN_GROUP_LIST,
 ];

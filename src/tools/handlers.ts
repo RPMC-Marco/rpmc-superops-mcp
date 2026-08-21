@@ -8,7 +8,12 @@ import { auditErrorSummary, toClientSafeError } from "../privacy/errors.js";
 import { attachmentMetadata, sanitizeTicketText } from "../privacy/redact.js";
 import { sanitizeErrorText, sanitizeOutput } from "../privacy/safe-output.js";
 import { investigateAsset } from "../assets/investigate-asset.js";
+import { investigateClient } from "../clients/investigate-client.js";
 import { investigationAuditFromResult } from "../investigate/audit.js";
+import { searchAlerts } from "../search/alerts-search.js";
+import { searchAssets } from "../search/assets-search.js";
+import { getSite, listSites, searchSites } from "../search/sites.js";
+import { searchTickets } from "../search/tickets-search.js";
 import { investigateTicket } from "../tickets/investigate-ticket.js";
 import type { ToolOutcome } from "../audit.js";
 
@@ -52,7 +57,7 @@ export async function handleTool(
       case "rpmc_status":
         return jsonResult({
           product: "rpmc-superops-mcp",
-          version: "0.1.4",
+          version: "0.1.5",
           phase: 1,
           readonly: true,
           writesRegistered: false,
@@ -181,6 +186,33 @@ export async function handleTool(
       }
       case "investigate_asset": {
         const payload = await investigateAsset(args, client);
+        return jsonResult(payload, investigationAuditFromResult(payload));
+      }
+      case "investigate_client": {
+        const payload = await investigateClient(args, client);
+        return jsonResult(payload, investigationAuditFromResult(payload));
+      }
+      case "superops_tickets_search": {
+        const payload = await searchTickets(args, client);
+        return jsonResult(payload, investigationAuditFromResult(payload));
+      }
+      case "superops_assets_search": {
+        const payload = await searchAssets(args, client);
+        return jsonResult(payload, investigationAuditFromResult(payload));
+      }
+      case "superops_alerts_search": {
+        const payload = await searchAlerts(args, client);
+        return jsonResult(payload, investigationAuditFromResult(payload));
+      }
+      case "superops_sites_list": {
+        return jsonResult(await listSites(args, client));
+      }
+      case "superops_sites_get": {
+        const payload = await getSite(args, client);
+        return jsonResult(payload, investigationAuditFromResult(payload));
+      }
+      case "superops_sites_search": {
+        const payload = await searchSites(args, client);
         return jsonResult(payload, investigationAuditFromResult(payload));
       }
       default:
