@@ -59,6 +59,17 @@ describe("graphql contracts", () => {
     expect(OBJECT_TYPED_QUERY_DOCUMENTS.join("\n")).toMatch(/client \{ accountId name \}/);
   });
 
+  it("nests official object-typed fields that live 0.1.8 selected as illegal leaves", () => {
+    const blob = EXPANDED_QUERY_DOCUMENTS.join("\n");
+    expect(blob).toMatch(/serviceTypeItem \{ itemId offeringType \}/);
+    expect(blob).toMatch(/statuses \{\s*statusId/);
+    expect(blob).toMatch(/rates \{ rateId name rateValue \}/);
+    expect(blob).toMatch(/visibility \{\s*mappingId/);
+    expect(blob).toMatch(/taxes \{\s*id/);
+    expect(blob).toMatch(/contract \{\s*contractId/);
+    expect(blob).not.toMatch(/KB_ARTICLE_CONTENT/);
+  });
+
   it("covers all 44 approved expansion queries", () => {
     const blob = EXPANDED_QUERY_DOCUMENTS.join("\n");
     const required = [

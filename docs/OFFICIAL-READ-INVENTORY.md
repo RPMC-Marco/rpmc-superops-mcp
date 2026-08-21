@@ -7,14 +7,17 @@ This file accounts for **100% of official `get*` query operations** in that sche
 Status values:
 
 - **IMPLEMENTED / LIVE-CONFIRMED** — MCP tool exists; RPMC tenant confirmed
-- **IMPLEMENTED / NEEDS LIVE CONFIRMATION** — MCP tool exists; not yet live-confirmed on RPMC
+- **IMPLEMENTED / NEEDS REVALIDATION** — MCP tool exists; 0.1.9 contract correction not yet live-tested
+- **IMPLEMENTED / NOT TESTABLE / NO DATA** — MCP tool exists; no tenant record/ID was available
+- **LIVE-UNSUPPORTED** — RPMC tenant rejects the query after the official contract was honored
 - **EXCLUDED / DEPRECATED** — SuperOps replaced it with Field APIs
 - **EXCLUDED / REDUNDANT** — same information already exposed
-- **EXCLUDED / LIVE UNSUPPORTED** — RPMC tenant rejects the query
+- **EXCLUDED / LIVE UNSUPPORTED** — RPMC tenant rejects the query (existing 0.1.7)
 - **DEFERRED / SPECIAL-PURPOSE** — not currently usable at RPMC; not rejected forever
+- **PLANNED FUTURE ADDON** — not a GraphQL `get*` (KB article body download)
 - **PHASE 2 PARKED** — mutation; not a read
 
-Official KB article *body* is a separate SuperOps download API (`module=KB_ARTICLE_CONTENT`), not a GraphQL query. It is **not** in the 76 `get*` operations. GraphQL `getKbItem`/`getKbItems` return description/summary only. That download API is **NEEDS TABLETOP DECISION** if RPMC later wants full article HTML.
+Official KB article *body* is a separate SuperOps download API (`module=KB_ARTICLE_CONTENT`), not a GraphQL query. It is **PLANNED FUTURE ADDON**. GraphQL `getKbItem`/`getKbItems` return description/summary only. 0.1.9 does **not** implement the download API.
 
 ## Existing 18 reads (preserved)
 
@@ -43,54 +46,54 @@ Official KB article *body* is a separate SuperOps download API (`module=KB_ARTIC
 
 ## Newly implemented (44)
 
-All of these are **IMPLEMENTED / NEEDS LIVE CONFIRMATION**.
+0.1.8 live pass accounted for all 44. 0.1.9 corrects selection/input contracts that caused several of those failures. Do not mark 0.1.9 corrections LIVE-CONFIRMED from unit tests.
 
-| # | Query | MCP tool |
-|---|---|---|
-| 1 | getAllFields | `superops_fields_all` |
-| 2 | getField | `superops_fields_get` |
-| 3 | getFields | `superops_fields_lookup` |
-| 4 | getAssetCustomFields | `superops_asset_custom_fields` |
-| 5 | getAssetDiskDetails | `superops_assets_disks` |
-| 6 | getAssetUserLog | `superops_assets_user_log` |
-| 7 | getDeviceCategories | `superops_device_categories` |
-| 8 | getClientStageList | `superops_org_catalog` kind=`client_stage` |
-| 9 | getClientUser | `superops_client_users_get` |
-| 10 | getClientUserList | `superops_client_users_list` |
-| 11 | getClientUserAssociationList | `superops_client_users_associations` |
-| 12 | getRequesterRoleList | `superops_org_catalog` kind=`requester_role` |
-| 13 | getTechnicianRoleList | `superops_org_catalog` kind=`technician_role` |
-| 14 | getDesignationList | `superops_org_catalog` kind=`designation` |
-| 15 | getTeamList | `superops_org_catalog` kind=`team` |
-| 16 | getBusinessFunctionList | `superops_org_catalog` kind=`business_function` |
-| 17 | getClientContract | `superops_contracts_get` |
-| 18 | getClientContractList | `superops_contracts_list` |
-| 19 | getSLAList | `superops_org_catalog` kind=`sla` |
-| 20 | getOfferedItems | `superops_offered_items` |
-| 21 | getServiceCatalogItem | `superops_catalog_get` |
-| 22 | getServiceCatalogItemList | `superops_catalog_list` |
-| 23 | getServiceCategoryList | `superops_catalog_categories` |
-| 24 | getServiceItem | `superops_services_get` |
-| 25 | getServiceItemList | `superops_services_list` |
-| 26 | getTax | `superops_taxes_get` |
-| 27 | getTaxList | `superops_taxes_list` |
-| 28 | getPaymentMethodList | `superops_payment_config` kind=`method` |
-| 29 | getPaymentTermList | `superops_payment_config` kind=`term` |
-| 30 | getInvoice | `superops_invoices_get` |
-| 31 | getInvoiceList | `superops_invoices_list` |
-| 32 | getInvoiceItemList | `superops_invoice_items` |
-| 33 | getItDocumentation | `superops_itdocs_get` |
-| 34 | getItDocumentationList | `superops_itdocs_list` |
-| 35 | getItDocumentationCategories | `superops_itdocs_categories` |
-| 36 | getKbItem | `superops_kb_get` |
-| 37 | getKbItems | `superops_kb_list` |
-| 38 | getScriptList | `superops_scripts_list` |
-| 39 | getScriptListByType | `superops_scripts_by_type` |
-| 40 | getTask | `superops_tasks_get` |
-| 41 | getTaskList | `superops_tasks_list` |
-| 42 | getWorkStatusList | `superops_work_statuses` |
-| 43 | getWorklogEntries | `superops_worklogs_list` |
-| 44 | getHolidayList | `superops_org_catalog` kind=`holiday` |
+| # | Query | MCP tool | Status after 0.1.8 live / 0.1.9 correction |
+|---|---|---|---|
+| 1 | getAllFields | `superops_fields_all` | LIVE-CONFIRMED |
+| 2 | getField | `superops_fields_get` | LIVE-CONFIRMED |
+| 3 | getFields | `superops_fields_lookup` | LIVE-CONFIRMED |
+| 4 | getAssetCustomFields | `superops_asset_custom_fields` | IMPLEMENTED / NEEDS REVALIDATION (modules now required) |
+| 5 | getAssetDiskDetails | `superops_assets_disks` | LIVE-CONFIRMED |
+| 6 | getAssetUserLog | `superops_assets_user_log` | LIVE-CONFIRMED |
+| 7 | getDeviceCategories | `superops_device_categories` | LIVE-CONFIRMED |
+| 8 | getClientStageList | `superops_org_catalog` kind=`client_stage` | IMPLEMENTED / NEEDS REVALIDATION (`statuses` now nested) |
+| 9 | getClientUser | `superops_client_users_get` | LIVE-CONFIRMED |
+| 10 | getClientUserList | `superops_client_users_list` | LIVE-CONFIRMED |
+| 11 | getClientUserAssociationList | `superops_client_users_associations` | LIVE-CONFIRMED |
+| 12 | getRequesterRoleList | `superops_org_catalog` kind=`requester_role` | LIVE-CONFIRMED |
+| 13 | getTechnicianRoleList | `superops_org_catalog` kind=`technician_role` | LIVE-CONFIRMED |
+| 14 | getDesignationList | `superops_org_catalog` kind=`designation` | LIVE-CONFIRMED |
+| 15 | getTeamList | `superops_org_catalog` kind=`team` | LIVE-CONFIRMED |
+| 16 | getBusinessFunctionList | `superops_org_catalog` kind=`business_function` | LIVE-CONFIRMED |
+| 17 | getClientContract | `superops_contracts_get` | NOT TESTABLE / NO DATA (blocked by list failure) |
+| 18 | getClientContractList | `superops_contracts_list` | IMPLEMENTED / NEEDS REVALIDATION (`contract` now nested) |
+| 19 | getSLAList | `superops_org_catalog` kind=`sla` | LIVE-CONFIRMED |
+| 20 | getOfferedItems | `superops_offered_items` | IMPLEMENTED / NEEDS REVALIDATION (wrapper already ListInfoInput; 0.1.8 error was misclassified) |
+| 21 | getServiceCatalogItem | `superops_catalog_get` | IMPLEMENTED / NEEDS REVALIDATION (`serviceTypeItem` nested; use catalog list `itemId`) |
+| 22 | getServiceCatalogItemList | `superops_catalog_list` | IMPLEMENTED / NEEDS REVALIDATION (`serviceTypeItem` nested) |
+| 23 | getServiceCategoryList | `superops_catalog_categories` | LIVE-CONFIRMED |
+| 24 | getServiceItem | `superops_services_get` | IMPLEMENTED / NEEDS REVALIDATION (use service list `itemId`, not catalog/worklog IDs) |
+| 25 | getServiceItemList | `superops_services_list` | IMPLEMENTED / NEEDS REVALIDATION |
+| 26 | getTax | `superops_taxes_get` | NOT TESTABLE / NO DATA |
+| 27 | getTaxList | `superops_taxes_list` | IMPLEMENTED / NEEDS REVALIDATION (`rates` now nested) |
+| 28 | getPaymentMethodList | `superops_payment_config` kind=`method` | LIVE-CONFIRMED |
+| 29 | getPaymentTermList | `superops_payment_config` kind=`term` | LIVE-CONFIRMED |
+| 30 | getInvoice | `superops_invoices_get` | IMPLEMENTED / NEEDS REVALIDATION (`taxes` now nested; identifier is list `invoiceId`) |
+| 31 | getInvoiceList | `superops_invoices_list` | LIVE-CONFIRMED |
+| 32 | getInvoiceItemList | `superops_invoice_items` | LIVE-CONFIRMED |
+| 33 | getItDocumentation | `superops_itdocs_get` | LIVE-CONFIRMED (0.1.9 adds secret-field redaction; re-check privacy) |
+| 34 | getItDocumentationList | `superops_itdocs_list` | LIVE-CONFIRMED (0.1.9 adds secret-field redaction; re-check privacy) |
+| 35 | getItDocumentationCategories | `superops_itdocs_categories` | LIVE-CONFIRMED |
+| 36 | getKbItem | `superops_kb_get` | IMPLEMENTED / NEEDS REVALIDATION (`visibility` now nested; use list `itemId`) |
+| 37 | getKbItems | `superops_kb_list` | LIVE-CONFIRMED |
+| 38 | getScriptList | `superops_scripts_list` | LIVE-CONFIRMED |
+| 39 | getScriptListByType | `superops_scripts_by_type` | LIVE-CONFIRMED |
+| 40 | getTask | `superops_tasks_get` | NOT TESTABLE / NO DATA |
+| 41 | getTaskList | `superops_tasks_list` | IMPLEMENTED / NEEDS REVALIDATION (GetTaskListInput.listInfo wrapper already official) |
+| 42 | getWorkStatusList | `superops_work_statuses` | LIVE-CONFIRMED |
+| 43 | getWorklogEntries | `superops_worklogs_list` | LIVE-CONFIRMED |
+| 44 | getHolidayList | `superops_org_catalog` kind=`holiday` | LIVE-CONFIRMED |
 
 ## Exclusions
 
@@ -124,3 +127,14 @@ All `create*` / `update*` / `delete*` / `resolveAlerts` / `runScriptOnAsset` / r
 - Excluded live-unsupported: **1**
 - Deferred special-purpose: **1**
 - **76 = 62 + 11 + 1 + 1 + 1**
+
+## Error codes (0.1.9)
+
+- `unsupported_filter` — a filter or sort was actually sent and SuperOps rejected that filter/sort, **or** the local `unmonitored=true` policy (no SuperOps call). Not a generic GraphQL-error bucket.
+- `query_failed` — unfiltered list/query SuperOps GraphQL rejection (schema/input/contract). Not `not_found`.
+- `lookup_failed` — opaque get/query failure. Never rewritten to `not_found`.
+- `not_found` — only after a successful query that returns no record.
+
+## IT documentation secrets (0.1.9)
+
+`ItDocumentation.customFields` can hold UI data including license keys. PASSWORD/SECURE_TEXT values and product-key-shaped / Key-Serial labeled values are redacted. Ordinary notes, product names, URLs, and server names are preserved. Redaction metadata records presence without the secret. Secrets are not written to audit logs.

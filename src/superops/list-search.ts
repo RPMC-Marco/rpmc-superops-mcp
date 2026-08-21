@@ -7,9 +7,20 @@ import { GET_ASSET_LIST } from "./queries.js";
 
 export interface ListQueryFailure {
   ok: false;
-  code: "unsupported_filter" | "lookup_failed" | "rate_limited" | "timeout" | "unavailable";
+  code: "unsupported_filter" | "query_failed" | "lookup_failed" | "rate_limited" | "timeout" | "unavailable";
   message: string;
   upstreamFailureCategory: string;
+}
+
+function attemptedFilterOrSort(input: Record<string, unknown>): boolean {
+  if (input.condition != null) return true;
+  if (Array.isArray(input.sort) && input.sort.length > 0) return true;
+  const nested =
+    input.listInfo && typeof input.listInfo === "object" && !Array.isArray(input.listInfo)
+      ? (input.listInfo as Record<string, unknown>)
+      : {};
+  if (nested.condition != null) return true;
+  return Array.isArray(nested.sort) && nested.sort.length > 0;
 }
 
 export async function queryBoundedList(
@@ -32,7 +43,8 @@ export async function queryBoundedList(
         upstreamFailureCategory: upstreamFailureCategory(error),
       };
     }
-    if (error instanceof SuperOpsError && isFilterConditionRejected(error)) {
+    const filterOrSortAttempted = attemptedFilterOrSort(input);
+    if (filterOrSortAttempted && error instanceof SuperOpsError && isFilterConditionRejected(error)) {
       return {
         ok: false,
         code: "unsupported_filter",
@@ -42,8 +54,8 @@ export async function queryBoundedList(
     }
     return {
       ok: false,
-      code: "lookup_failed",
-      message: toClientSafeError(error),
+      code: "query_failed",
+      message: "SuperOps rejected the query; this was not a filter rejection",
       upstreamFailureCategory: upstreamFailureCategory(error),
     };
   }

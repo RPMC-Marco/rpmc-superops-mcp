@@ -41,8 +41,8 @@ export const EXPANDED_CAPABILITIES: Capability[] = [
   ),
   readTool(
     "superops_asset_custom_fields",
-    "Fetch asset custom-field definitions via official getAssetCustomFields. Optional modules such as Windows or Mac.",
-    z.object({ modules: z.union([z.string(), z.array(z.string())]).optional() })
+    "Fetch asset custom-field definitions via official getAssetCustomFields. modules is required (e.g. Windows or Mac). Live RPMC rejects an omitted input; this MCP does not invent a default module.",
+    z.object({ modules: z.union([z.string(), z.array(z.string()).min(1)]) })
   ),
   readTool(
     "superops_assets_disks",
@@ -96,11 +96,11 @@ export const EXPANDED_CAPABILITIES: Capability[] = [
   ),
   readTool("superops_contracts_get", "Get one client contract by official contractId. Read-only.", z.object({ contractId: z.string() })),
   readTool("superops_contracts_list", "List a bounded page of client contracts via official getClientContractList.", pageInput),
-  readTool("superops_catalog_get", "Get one service catalog item (product/service) by official itemId.", z.object({ itemId: z.string() })),
-  readTool("superops_catalog_list", "List a bounded page of service catalog items via official getServiceCatalogItemList.", pageInput),
+  readTool("superops_catalog_get", "Get one service catalog item by official ServiceCatalogItemIdentifierInput.itemId. Use itemId from superops_catalog_list. Do not use worklog serviceItem.itemId or service-item IDs.", z.object({ itemId: z.string() })),
+  readTool("superops_catalog_list", "List a bounded page of service catalog items via official getServiceCatalogItemList(ListInfoInput). Returned itemId is the get identifier for superops_catalog_get.", pageInput),
   readTool("superops_catalog_categories", "List service catalog categories via official getServiceCategoryList.", z.object({})),
-  readTool("superops_services_get", "Get one service item by official itemId.", z.object({ itemId: z.string() })),
-  readTool("superops_services_list", "List a bounded page of service items via official getServiceItemList.", pageInput),
+  readTool("superops_services_get", "Get one service item by official ServiceItemIdentifierInput.itemId. Use itemId from superops_services_list. Distinct from service catalog item IDs and from worklog nested JSON.", z.object({ itemId: z.string() })),
+  readTool("superops_services_list", "List a bounded page of service items via official getServiceItemList(ListInfoInput). Returned itemId is the get identifier for superops_services_get.", pageInput),
   readTool("superops_offered_items", "List a bounded page of offered contract/work items via official getOfferedItems.", pageInput),
   readTool("superops_taxes_get", "Get one tax rate by official taxId.", z.object({ taxId: z.string() })),
   readTool("superops_taxes_list", "List a bounded page of taxes via official getTaxList.", pageInput),
@@ -109,7 +109,7 @@ export const EXPANDED_CAPABILITIES: Capability[] = [
     "List payment methods or terms. kind=method uses getPaymentMethodList; kind=term uses getPaymentTermList.",
     z.object({ kind: z.enum(["method", "term"]) })
   ),
-  readTool("superops_invoices_get", "Get one invoice by official invoiceId. Line items are bounded. Structured email is omitted.", z.object({ invoiceId: z.string() })),
+  readTool("superops_invoices_get", "Get one invoice by official InvoiceIdentifierInput.invoiceId (not displayId). Use invoiceId from superops_invoices_list. Line items are bounded. Structured email is omitted.", z.object({ invoiceId: z.string() })),
   readTool("superops_invoices_list", "List a bounded page of invoices via official getInvoiceList. Does not return full line items.", pageInput),
   readTool("superops_invoice_items", "List a bounded page of invoice line items via official getInvoiceItemList.", pageInput),
   readTool(
@@ -125,7 +125,7 @@ export const EXPANDED_CAPABILITIES: Capability[] = [
   readTool("superops_itdocs_categories", "List IT documentation categories via official getItDocumentationCategories.", z.object({})),
   readTool(
     "superops_kb_get",
-    "Get one KB item (article or collection) by official itemId. GraphQL returns description/summary only; article body is a separate SuperOps download API and is not fetched here.",
+    "Get one KB item (article or collection) by official KBItemIdentifierInput.itemId. Use itemId from superops_kb_list. GraphQL returns description/summary only; article body is a separate SuperOps download API and is not fetched here.",
     z.object({ itemId: z.string() })
   ),
   readTool("superops_kb_list", "List a bounded page of KB items via official getKbItems(listInfo). Does not dump all KB content.", pageInput),
@@ -144,7 +144,7 @@ export const EXPANDED_CAPABILITIES: Capability[] = [
   readTool("superops_work_statuses", "List task/project work statuses via official getWorkStatusList.", z.object({})),
   readTool(
     "superops_worklogs_list",
-    "List a bounded page of worklog entries via official GetWorklogEntriesInput. module is required (TICKET or PROJECT). There is no ticketId-only worklog query.",
+    "List a bounded page of worklog entries via official GetWorklogEntriesInput. module is required (TICKET or PROJECT). There is no ticketId-only worklog query. Nested serviceItem JSON is not the identifier for catalog/service exact-get tools.",
     pageInput.extend({ module: z.enum(["TICKET", "PROJECT"]) })
   ),
 ];

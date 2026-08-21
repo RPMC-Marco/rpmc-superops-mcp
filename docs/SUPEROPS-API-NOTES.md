@@ -65,7 +65,7 @@ Full read-surface live validation against QNAP 0.1.6: **PASS WITH CORRECTIONS**.
 - **Unsupported:** `getAssetList` `lastCommunicatedTime` sort; `getUnMonitoredAssetList`
 - JSON-scalar `site.client.accountId` arrived as an unquoted JSON number and lost precision under `JSON.parse` (corrected in 0.1.7 at the parse boundary)
 
-0.1.7 is the current QNAP baseline (commit `23229825460e5b88c306c6cf0b0c3dcc080958cb`). 0.1.8 is the undeployed Phase 1 read-expansion candidate.
+0.1.8 is live on QNAP (commit `41d424563d8454b43586912212a82da9e480f0c3`). 0.1.9 is the undeployed Phase 1 contract-correction candidate.
 
 ### `investigate_ticket` (RPMC LIVE-CONFIRMED, 2026-08-20 / 0.1.3)
 
@@ -170,4 +170,4 @@ Audit metadata is a whitelist (resolution method, section state, truncation, log
 
 ### 0.1.8 Phase 1 read expansion
 
-44 additional official reads are implemented as explicit domain MCP tools. Full accounting: `docs/OFFICIAL-READ-INVENTORY.md`. They are **not** live-confirmed. IT documentation GraphQL type has no body field. KB article HTML is a separate SuperOps download API, not fetched. Worklogs require official `module` (TICKET|PROJECT). Scripts are list-only. Writes remain unregistered.
+44 additional official reads are implemented as explicit domain MCP tools. Full accounting: `docs/OFFICIAL-READ-INVENTORY.md`. 0.1.8 live-confirmed 29 of them. 0.1.9 corrects object-field GraphQL selections, requires getAssetCustomFields modules, redacts IT-doc secret custom fields, and classifies unfiltered GraphQL failures as `query_failed` instead of `unsupported_filter`. IT documentation GraphQL type has no body field. KB article HTML is a separate SuperOps download API (planned future addon, not fetched). Worklogs require official `module` (TICKET|PROJECT). Scripts are list-only. Writes remain unregistered.

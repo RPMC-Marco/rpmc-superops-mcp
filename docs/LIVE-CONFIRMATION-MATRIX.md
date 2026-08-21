@@ -61,30 +61,41 @@ These preserve the 0.1.6 invariants above; they change MCP behavior where 0.1.6 
 
 Also re-check after deploy: no write tools; no page 2; no `getAlertList` when `assetId` is set; `rpmc_status` version/commit; identity lookups stay page 1.
 
-## 0.1.8 new reads (NEEDS LIVE CONFIRMATION)
+## 0.1.8 live validation (completed against QNAP 0.1.8 / `41d4245`)
 
-Do not mark these live-confirmed from unit tests. After the next QNAP deploy, fully reconnect MCP and exercise one representative call per tool. Safe failure is `unsupported_filter` / `lookup_failed` / `unavailable`. Never fall back to a tenant scan. Never call `getUnMonitoredAssetList`.
+Accounted for all 44 new GraphQL reads. Established 0.1.7 surface passed regression. `readonly=true`, `writesRegistered=false`. No mutations. No script execution.
 
-| MCP tool | GraphQL | Input to confirm | Expected | Safe failure |
-|---|---|---|---|---|
-| superops_fields_all | getAllFields | module=`TICKET` | Field definitions, options | lookup_failed |
-| superops_fields_get | getField | module+id or columnName | one Field | lookup_failed, not not_found unless empty payload |
-| superops_fields_lookup | getFields | 1-N identifiers | matching Fields | lookup_failed |
-| superops_asset_custom_fields | getAssetCustomFields | optional modules | CustomField list | lookup_failed |
-| superops_assets_disks | getAssetDiskDetails | live assetId | bounded disks | lookup_failed |
-| superops_assets_user_log | getAssetUserLog | live assetId | bounded user logs | lookup_failed |
-| superops_device_categories | getDeviceCategories | optional ENDPOINT | categories | lookup_failed |
-| superops_client_users_get | getClientUser | userId | user without structured email | lookup_failed |
-| superops_client_users_list | getClientUserList | optional clientId, page 1 | one page | unsupported_filter / lookup_failed |
-| superops_client_users_associations | getClientUserAssociationList | page 1 | one page of associations | lookup_failed |
-| superops_org_catalog | 8 bare lists | each kind | catalog rows | lookup_failed |
-| superops_contracts_get/list | getClientContract(List) | contractId / page 1 | contract metadata | lookup_failed |
-| superops_catalog_* / superops_services_* / superops_offered_items | catalog/service/offered queries | id or page 1 | prices usable, no writes | lookup_failed |
-| superops_taxes_* / superops_payment_config | tax/payment queries | id / kind / page 1 | config lists | lookup_failed |
-| superops_invoices_* | invoice queries | invoiceId / page 1 | totals + bounded lines; no email | lookup_failed |
-| superops_itdocs_* | IT doc queries | itDocId / typeId+page / categories | metadata, no body field on type | lookup_failed |
-| superops_kb_* | getKbItem / getKbItems | itemId / listInfo page 1 | description only, not download API | lookup_failed |
-| superops_scripts_* | getScriptList / ByType | page 1 / type=WINDOWS | metadata, no execute | lookup_failed |
-| superops_tasks_* / superops_work_statuses | getTask(List) / getWorkStatusList | taskId / page 1 | task JSON ticket leaf | lookup_failed |
-| superops_worklogs_list | getWorklogEntries | module=TICKET page 1 | bounded entries; no ticketId-only query | lookup_failed |
+**LIVE-CONFIRMED (29):** getAllFields, getField, getFields, getAssetDiskDetails, getAssetUserLog, getDeviceCategories, getClientUser, getClientUserList, getClientUserAssociationList, getRequesterRoleList, getTechnicianRoleList, getDesignationList, getTeamList, getBusinessFunctionList, getHolidayList, getSLAList, getServiceCategoryList, getPaymentMethodList, getPaymentTermList, getInvoiceList, getInvoiceItemList, getItDocumentation, getItDocumentationList, getItDocumentationCategories, getKbItems, getScriptList, getScriptListByType, getWorkStatusList, getWorklogEntries.
 
+**PARTIAL:** getAssetCustomFields — explicit Windows/Mac succeeded (empty complete); omitted input SuperOps error. 0.1.9 requires `modules`.
+
+**LIVE-UNSUPPORTED on 0.1.8 (several were GraphQL selection / error-classification bugs, not proven-unavailable capabilities):** getClientStageList, getClientContractList, getOfferedItems, getServiceCatalogItemList, getServiceItemList, getTaxList, getTaskList.
+
+**FAILED exact-get:** getInvoice (list `invoiceId` rejected because `taxes` was selected as a leaf), getKbItem (list `itemId` rejected because `visibility` was selected as a leaf), getServiceItem, getServiceCatalogItem (identifiers from unrelated types / list queries themselves failed).
+
+**NOT TESTABLE / NO DATA:** getClientContract, getTax, getTask.
+
+`unsupported_filter` was incorrectly applied to unfiltered list GraphQL failures. 0.1.9 narrows it.
+
+## 0.1.9 targeted revalidation (do not mark LIVE-CONFIRMED from unit tests)
+
+After QNAP 0.1.9 deploy and full MCP reconnect:
+
+| Query | Why revalidate | Success looks like | If still rejected |
+|---|---|---|---|
+| getAssetCustomFields | required `modules` | Windows/Mac complete (empty OK) | `malformed_input` locally if omitted; no SuperOps call |
+| getClientStageList | nest `statuses` | stage rows | then LIVE-UNSUPPORTED on RPMC tenant |
+| getClientContractList | nest `contract` | page of contracts + `contractId` | LIVE-UNSUPPORTED; do not enumerate another list |
+| getOfferedItems | error class + same ListInfoInput | page of items | LIVE-UNSUPPORTED |
+| getServiceCatalogItemList | nest `serviceTypeItem` | page with catalog `itemId` | LIVE-UNSUPPORTED |
+| getServiceItemList | same ListInfoInput; confirm selection | page with service `itemId` | LIVE-UNSUPPORTED |
+| getTaxList | nest `rates` | page with `taxId` | LIVE-UNSUPPORTED |
+| getTaskList | GetTaskListInput `{ listInfo }` | page with `taskId` | LIVE-UNSUPPORTED |
+| getInvoice | nest `taxes`; use list `invoiceId` | invoice + bounded lines | lookup_failed, never not_found unless empty payload |
+| getKbItem | nest `visibility`; use list `itemId` | article/collection metadata, no body | lookup_failed |
+| getServiceCatalogItem | catalog list `itemId` only | catalog item | lookup_failed |
+| getServiceItem | service list `itemId` only | service item | lookup_failed |
+| getClientContract / getTax / getTask | if matching list now yields an ID | exact get | remain NOT TESTABLE if no rows |
+| IT docs get/list | secret redaction | product names kept; Key/Serial values null + redaction metadata | do not log secrets |
+
+Safe failure for unfiltered contract errors is now `query_failed`, not `unsupported_filter`. Local `unmonitored=true` remains `unsupported_filter` with zero SuperOps calls.

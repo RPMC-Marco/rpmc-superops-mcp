@@ -1,6 +1,6 @@
 {
   "name": "rpmc-superops-mcp",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Standalone SuperOps MCP server for RPM Computers. Phase 1 is authenticated, read-only, and intended for Docker on QNAP.",
   "type": "module",
   "main": "dist/index.js",

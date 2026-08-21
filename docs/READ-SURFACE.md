@@ -2,7 +2,7 @@
 
 Official source: [SuperOps MSP GraphQL API](https://developer.superops.com/msp) and Help Center [Search, pagination, and sorting](https://support.superops.com/en/articles/6632220-search-pagination-and-sorting) (retrieved 2026-08-21). Community code is reference only.
 
-Live tenant evidence: **0.1.6** (`a2ca686ca22921ed2a87ac93848b2ff2c84f53a5`). Code corrections live on QNAP: **0.1.7**. Undeployed read expansion: **0.1.8**. See `docs/LIVE-CONFIRMATION-MATRIX.md` and `docs/OFFICIAL-READ-INVENTORY.md`.
+Live tenant evidence: **0.1.6** / **0.1.7** QNAP baseline, then **0.1.8** live expansion pass. Undeployed contract corrections: **0.1.9**. See `docs/LIVE-CONFIRMATION-MATRIX.md` and `docs/OFFICIAL-READ-INVENTORY.md`.
 
 ## A. Implemented and RPMC live-confirmed
 
@@ -40,7 +40,7 @@ Live tenant evidence: **0.1.6** (`a2ca686ca22921ed2a87ac93848b2ff2c84f53a5`). Co
 
 See `docs/OFFICIAL-READ-INVENTORY.md`. Every official SuperOps `get*` query is IMPLEMENTED, EXCLUDED (with reason), or DEFERRED / SPECIAL-PURPOSE. There is no silent low-value bucket.
 
-The 44 newly approved reads are implemented as explicit domain MCP tools (0.1.8) and need a QNAP live-confirmation pass. Deprecated Field replacements are not used. `getUnMonitoredAssetList` is never invoked. `getAssetInfoByTPEndpointIds` is deferred (no RPMC TP endpoint integration). `getAssetPatchStatus` is redundant with `getAsset.patchStatus` / `getAssetPatchDetails`.
+The 44 newly approved reads were live-accounted in 0.1.8. 0.1.9 corrects GraphQL object-field selections, requires getAssetCustomFields modules, redacts IT-doc secret custom fields, and stops labeling unfiltered GraphQL failures as `unsupported_filter`. KB article body download remains a planned future addon. Deprecated Field replacements are not used. `getUnMonitoredAssetList` is never invoked.
 
 ## E. Unsuitable / intentionally not implemented
 
@@ -62,7 +62,9 @@ The 44 newly approved reads are implemented as explicit domain MCP tools (0.1.8)
 
 ## Privacy (structured email)
 
-Aggregators and constrained search omit structured `email` keys (requester/owner/user objects). Primitive `superops_alerts_list` does the same for `asset.owner.email`. Freeform ticket/alert `message`, `description`, conversations, and notes are **not** general-purpose email redaction; emails inside those fields can be diagnostically relevant.
+Aggregators and constrained search omit structured `email` keys (requester/owner/user objects). Primitive `superops_alerts_list` does the same for `asset.owner.email`. Primitive `superops_technicians_list` still returns structured technician email (existing 0.1.7 behavior). Freeform ticket/alert `message`, `description`, conversations, and notes are **not** general-purpose email redaction; emails inside those fields can be diagnostically relevant.
+
+IT documentation `customFields`: PASSWORD / SECURE_TEXT values and product/license-key-shaped values are redacted (`redacted=true`, presence preserved). Ordinary product names, notes, URLs, and server names are kept. Generic secret sanitizer remains defense in depth.
 
 ## Cursor MCP catalog
 

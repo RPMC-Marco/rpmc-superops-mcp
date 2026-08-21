@@ -219,6 +219,114 @@ describe("expanded Phase 1 reads", () => {
     expect(result).toBeNull();
   });
 
+  it("requires modules for getAssetCustomFields and does not invent a default", async () => {
+    const omitted = await handleExpandedRead("superops_asset_custom_fields", {}, fakeClient(() => {
+      throw new Error("must not call SuperOps");
+    }));
+    expect(omitted?.code).toBe("malformed_input");
+    let variables: Record<string, unknown> = {};
+    await handleExpandedRead(
+      "superops_asset_custom_fields",
+      { modules: "Windows" },
+      fakeClient((_query, vars) => {
+        variables = vars ?? {};
+        return { getAssetCustomFields: [] };
+      })
+    );
+    expect(variables.input).toEqual(["Windows"]);
+  });
+
+  it("does not label an unfiltered list GraphQL failure as unsupported_filter", async () => {
+    const result = await handleExpandedRead(
+      "superops_catalog_list",
+      { page: 1 },
+      fakeClient(() => {
+        throw new SuperOpsError("Field 'serviceTypeItem' of type 'ServiceTypeItem' must have a sub selection");
+      })
+    );
+    expect(result?.code).toBe("query_failed");
+    expect(result?.code).not.toBe("unsupported_filter");
+    expect(result?.code).not.toBe("not_found");
+  });
+
+  it("sends ListInfoInput directly for catalog/service/tax/contract/offered lists and GetTaskListInput.listInfo for tasks", async () => {
+    const seen: Array<{ query: string; variables?: Record<string, unknown> }> = [];
+    const client = fakeClient((query, variables) => {
+      seen.push({ query, variables });
+      if (query.includes("getTaskList")) {
+        return { getTaskList: { tasks: [{ taskId: "t1" }], listInfo: { hasMore: false } } };
+      }
+      if (query.includes("getServiceCatalogItemList")) {
+        return { getServiceCatalogItemList: { items: [{ itemId: "c1" }], listInfo: { hasMore: false } } };
+      }
+      if (query.includes("getServiceItemList")) {
+        return { getServiceItemList: { items: [{ itemId: "s1" }], listInfo: { hasMore: false } } };
+      }
+      if (query.includes("getTaxList")) {
+        return { getTaxList: { taxes: [{ taxId: "x1" }], listInfo: { hasMore: false } } };
+      }
+      if (query.includes("getClientContractList")) {
+        return { getClientContractList: { clientContracts: [{ contractId: "k1" }], listInfo: { hasMore: false } } };
+      }
+      if (query.includes("getOfferedItems")) {
+        return { getOfferedItems: { items: [{ itemId: "o1" }], listInfo: { hasMore: false } } };
+      }
+      throw new Error(query.slice(0, 80));
+    });
+    await handleExpandedRead("superops_catalog_list", { page: 1, pageSize: 10 }, client);
+    await handleExpandedRead("superops_services_list", { page: 1, pageSize: 10 }, client);
+    await handleExpandedRead("superops_taxes_list", { page: 1, pageSize: 10 }, client);
+    await handleExpandedRead("superops_contracts_list", { page: 1, pageSize: 10 }, client);
+    await handleExpandedRead("superops_offered_items", { page: 1, pageSize: 10 }, client);
+    await handleExpandedRead("superops_tasks_list", { page: 1, pageSize: 10 }, client);
+    const byName = (name: string) => seen.find((item) => item.query.includes(name))?.variables as { input: Record<string, unknown> };
+    expect(byName("getServiceCatalogItemList").input).toMatchObject({ page: 1, pageSize: 10 });
+    expect(byName("getServiceItemList").input).toMatchObject({ page: 1, pageSize: 10 });
+    expect(byName("getTaxList").input).toMatchObject({ page: 1, pageSize: 10 });
+    expect(byName("getClientContractList").input).toMatchObject({ page: 1, pageSize: 10 });
+    expect(byName("getOfferedItems").input).toMatchObject({ page: 1, pageSize: 10 });
+    expect(byName("getTaskList").input).toMatchObject({ listInfo: { page: 1, pageSize: 10 } });
+  });
+
+  it("chains list identifiers into the official get input fields", async () => {
+    const invoice = await handleExpandedRead(
+      "superops_invoices_get",
+      { invoiceId: "350481346737401856" },
+      fakeClient((_query, variables) => {
+        expect(variables).toEqual({ input: { invoiceId: "350481346737401856" } });
+        return { getInvoice: { invoiceId: "350481346737401856", displayId: "260525-0001" } };
+      })
+    );
+    expect(invoice?.status).toBe("complete");
+    const kb = await handleExpandedRead(
+      "superops_kb_get",
+      { itemId: "963723386435076096" },
+      fakeClient((_query, variables) => {
+        expect(variables).toEqual({ input: { itemId: "963723386435076096" } });
+        return { getKbItem: { itemId: "963723386435076096", itemType: "KB_ARTICLE" } };
+      })
+    );
+    expect(kb?.status).toBe("complete");
+  });
+
+  it("redacts IT documentation product keys without dropping ordinary notes", async () => {
+    const result = await handleExpandedRead(
+      "superops_itdocs_get",
+      { itDocId: "217184133502664704" },
+      fakeClient(() => ({
+        getItDocumentation: {
+          itDocId: "217184133502664704",
+          name: "RMS MS Office Pro Plus 2024",
+          customFields: { udf3text: "MS Office Pro Plus 2024", udf6text: "CVT99-RN2W6-JHK9G-WF3DP-8XGJ3" },
+        },
+      }))
+    );
+    const text = JSON.stringify(result);
+    expect(text).toContain("MS Office Pro Plus 2024");
+    expect(text).not.toContain("CVT99-RN2W6-JHK9G-WF3DP-8XGJ3");
+    expect(text).toContain("customFieldsRedaction");
+  });
+
   it("preserves large JSON IDs on expanded gets", async () => {
     const bigId = "9001114136934215681";
     const { SuperOpsClient } = await import("../superops/client.js");

@@ -81,11 +81,18 @@ export async function handleExpandedRead(
     }
     case "superops_asset_custom_fields": {
       const modules = stringList(args.modules ?? args.module);
+      if (!modules.length) {
+        return failed({
+          code: "malformed_input",
+          message: "modules is required (official getAssetCustomFields input is [String!]; live RPMC rejects an omitted input). Example: Windows, Mac.",
+          query: "getAssetCustomFields",
+        });
+      }
       return runBareList(
         client,
         E.GET_ASSET_CUSTOM_FIELDS,
         "getAssetCustomFields",
-        modules.length ? { input: modules } : {},
+        { input: modules },
         (data) => asArray(data.getAssetCustomFields)
       );
     }

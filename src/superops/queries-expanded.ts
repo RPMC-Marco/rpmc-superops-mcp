@@ -58,7 +58,7 @@ const CATALOG_ITEM_FIELDS = `
     salesTax { taxId name totalRate }
     sellingPrice { model details { value afterHoursValue } }
     costPrice { model details { value afterHoursValue } }
-    serviceTypeItem`;
+    serviceTypeItem { itemId offeringType }`;
 
 const SERVICE_ITEM_FIELDS = `
     itemId
@@ -80,7 +80,7 @@ const TAX_FIELDS = `
     taxId
     name
     totalRate
-    rates`;
+    rates { rateId name rateValue }`;
 
 const TASK_FIELDS = `
     taskId
@@ -216,7 +216,11 @@ query getClientStageList {
     stageId
     name
     constant
-    statuses
+    statuses {
+      statusId
+      name
+      constant
+    }
   }
 }
 `;
@@ -317,7 +321,12 @@ query getClientContract($input: ContractIdentifierInput!) {
   getClientContract(input: $input) {
     contractId
     client
-    contract
+    contract {
+      contractId
+      name
+      description
+      contractType
+    }
     startDate
     endDate
     contractStatus
@@ -331,7 +340,12 @@ query getClientContractList($input: ListInfoInput) {
     clientContracts {
       contractId
       client
-      contract
+      contract {
+        contractId
+        name
+        description
+        contractType
+      }
       startDate
       endDate
       contractStatus
@@ -482,7 +496,14 @@ query getInvoice($input: InvoiceIdentifierInput!) {
     paymentMethod
     paymentReference
     invoicePaymentTerm
-    taxes
+    taxes {
+      id
+      tax
+      taxRate
+      taxableAmount
+      taxAmount
+      rate
+    }
     items {
       itemId
       billedDate
@@ -579,7 +600,20 @@ export const GET_KB_ITEM = `
 query getKbItem($input: KBItemIdentifierInput!) {
   getKbItem(input: $input) {
     ${KB_ITEM_FIELDS}
-    visibility
+    visibility {
+      mappingId
+      portalType
+      clientSharedType
+      siteSharedType
+      userRoleSharedType
+      client
+      site
+      roles
+      userSharedType
+      groupSharedType
+      users
+      groups
+    }
   }
 }
 `;

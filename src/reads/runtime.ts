@@ -1,4 +1,5 @@
 import { asArray, asRecord, failureCode, omitStructuredEmail, type InvestigateStatus, upstreamFailureCategory } from "../investigate/common.js";
+import { applyItDocSecretPolicy } from "../privacy/custom-fields.js";
 import { toClientSafeError } from "../privacy/errors.js";
 import { sanitizeTicketText } from "../privacy/redact.js";
 import { pageClamp, stringArg } from "../superops/conditions.js";
@@ -77,7 +78,7 @@ export function sanitizeTextFields(value: unknown, keys = ["description", "notes
 }
 
 export function privacy(value: unknown): unknown {
-  return sanitizeTextFields(omitStructuredEmail(value));
+  return applyItDocSecretPolicy(sanitizeTextFields(omitStructuredEmail(value)));
 }
 
 export async function runGet(

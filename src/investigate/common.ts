@@ -92,11 +92,22 @@ export function omitRequesterEmail(detail: Record<string, unknown>): Record<stri
   return { ...detail, requester: omitStructuredEmail(rest) };
 }
 
+export function isGraphqlValidationError(error: unknown): boolean {
+  if (!(error instanceof SuperOpsError)) return false;
+  const code = (error.code ?? "").toUpperCase();
+  return code.includes("VALIDATION") || code === "BAD_USER_INPUT";
+}
+
+/**
+ * True only when SuperOps appears to have rejected a ListInfo condition/sort/attribute.
+ * Not a generic SuperOpsError bucket. Rate limits are never filter rejections.
+ */
 export function isFilterConditionRejected(error: unknown): boolean {
   if (!(error instanceof SuperOpsError)) return false;
+  if (isGraphqlValidationError(error)) return false;
   const blob = `${error.code ?? ""} ${error.message}`.toLowerCase();
   if (/\brate[-\s]?limit|too many requests|throttl/.test(blob)) return false;
-  return true;
+  return /\b(attribute|operator|condition|filter|sort)\b/.test(blob);
 }
 
 export function failureCode(error: unknown): string {
@@ -104,6 +115,7 @@ export function failureCode(error: unknown): string {
   if (error instanceof SuperOpsTimeoutError) return "timeout";
   if (error instanceof SuperOpsHttpError) return "unavailable";
   if (error instanceof SuperOpsMalformedResponseError) return "unavailable";
+  if (isGraphqlValidationError(error)) return "query_failed";
   return "lookup_failed";
 }
 

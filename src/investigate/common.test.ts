@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { accountIdFrom, pinItemsToAccountId, scalarId } from "./common.js";
+import { accountIdFrom, isFilterConditionRejected, pinItemsToAccountId, scalarId } from "./common.js";
+import { SuperOpsError } from "../superops/errors.js";
 
 const LIVE_ID = "6623952408805568512";
 
@@ -34,5 +35,13 @@ describe("pinItemsToAccountId", () => {
     expect(pinned.dropped).toBe(2);
     expect(accountIdFrom({ accountId: LIVE_ID })).toBe(LIVE_ID);
     expect(accountIdFrom({ accountId: Number(LIVE_ID) })).toBeUndefined();
+  });
+});
+
+describe("filter rejection classification", () => {
+  it("does not treat generic GraphQL contract failures as filter rejections", () => {
+    expect(isFilterConditionRejected(new SuperOpsError("Field taxes must have a sub selection"))).toBe(false);
+    expect(isFilterConditionRejected(new SuperOpsError("backend exploded"))).toBe(false);
+    expect(isFilterConditionRejected(new SuperOpsError("Unknown attribute status"))).toBe(true);
   });
 });
