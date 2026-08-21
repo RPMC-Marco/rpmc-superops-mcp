@@ -1,0 +1,46 @@
+{
+  "name": "rpmc-superops-mcp",
+  "version": "0.1.0",
+  "description": "Standalone SuperOps MCP server for RPM Computers. Phase 1 is authenticated, read-only, and intended for Docker on QNAP.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "rpmc-superops-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "NOTICE",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RPMC-Marco/rpmc-superops-mcp.git"
+  },
+  "keywords": [
+    "mcp",
+    "superops",
+    "msp",
+    "rpmc"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
