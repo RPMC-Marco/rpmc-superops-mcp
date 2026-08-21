@@ -1,6 +1,8 @@
+import { buildCommit } from "../build-info.js";
 import type { AppConfig } from "../config.js";
 import type { SuperOpsClient } from "../superops/client.js";
 import { clampPageSize } from "../superops/limiter.js";
+import { normalizeListPagination } from "../superops/pagination.js";
 import * as Q from "../superops/queries.js";
 import { auditErrorSummary, toClientSafeError } from "../privacy/errors.js";
 import { attachmentMetadata, sanitizeTicketText } from "../privacy/redact.js";
@@ -13,7 +15,7 @@ export interface ToolResult {
 }
 
 export function jsonResult(payload: unknown): ToolResult {
-  const sanitized = sanitizeOutput(payload);
+  const sanitized = sanitizeOutput(normalizeListPagination(payload));
   return { content: [{ type: "text", text: JSON.stringify(sanitized.payload, null, 2) }] };
 }
 
@@ -41,10 +43,11 @@ export async function handleTool(
       case "rpmc_status":
         return jsonResult({
           product: "rpmc-superops-mcp",
-          version: "0.1.1",
+          version: "0.1.2",
           phase: 1,
           readonly: true,
           writesRegistered: false,
+          commit: buildCommit(),
           region: config.superopsRegion,
           subdomainConfigured: Boolean(config.superopsSubdomain),
           transport: config.transport,
@@ -67,12 +70,15 @@ export async function handleTool(
       case "superops_tickets_get": {
         const ticketId = String(args.ticketId ?? "");
         if (!ticketId) return errorResult("ticketId is required");
-        const data = await client.query(Q.GET_TICKET, { input: { ticketId } });
+        const data = asRecord(await client.query(Q.GET_TICKET, { input: { ticketId } }));
+        const ticket = asRecord(data.getTicket ?? data);
         return jsonResult({
-          ticket: data,
+          ticket,
           notes: {
-            descriptionField: "not queried; use superops_tickets_conversations for DESCRIPTION items",
-            assetCorrelation: "not queried in Phase 1; requires live tenant validation",
+            descriptionField:
+              "not queried; original body is conversation type DESCRIPTION (RPMC live-confirmed)",
+            assetCorrelation:
+              "Ticket has no confirmed asset association; Alert.asset.assetId is the live alert-to-asset link",
           },
         });
       }

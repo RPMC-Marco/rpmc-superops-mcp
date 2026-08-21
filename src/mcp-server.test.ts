@@ -107,4 +107,101 @@ describe("handlers", () => {
     expect(body).not.toMatch(/"condition"/);
     expect(body).not.toMatch(/"status":"Open"/);
   });
+
+  it("flattens superops_tickets_get to ticket fields", async () => {
+    const config = loadConfig(stdioEnv);
+    const client = new SuperOpsClient(
+      { apiToken: "t", subdomain: "d", region: "us" },
+      {
+        requestTimeoutMs: 1000,
+        maxReadRetries: 1,
+        maxRetryDurationMs: 1000,
+        fetchImpl: async () =>
+          new Response(
+            JSON.stringify({
+              data: {
+                getTicket: { ticketId: "t1", displayId: "200826-0001", subject: "Printer jam" },
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          ),
+      }
+    );
+    const result = await handleTool("superops_tickets_get", { ticketId: "t1" }, client, config);
+    const payload = JSON.parse(result.content[0]?.text ?? "{}") as {
+      ticket: { ticketId: string; displayId: string; subject: string; getTicket?: unknown };
+      notes: { descriptionField: string };
+    };
+    expect(result.isError).toBeFalsy();
+    expect(payload.ticket.ticketId).toBe("t1");
+    expect(payload.ticket.displayId).toBe("200826-0001");
+    expect(payload.ticket.subject).toBe("Printer jam");
+    expect(payload.ticket.getTicket).toBeUndefined();
+    expect(payload.notes.descriptionField).toMatch(/DESCRIPTION/);
+  });
+
+  it("redacts secrets in flattened ticket output", async () => {
+    const config = loadConfig(stdioEnv);
+    const client = new SuperOpsClient(
+      { apiToken: "t", subdomain: "d", region: "us" },
+      {
+        requestTimeoutMs: 1000,
+        maxReadRetries: 1,
+        maxRetryDurationMs: 1000,
+        fetchImpl: async () =>
+          new Response(
+            JSON.stringify({
+              data: { getTicket: { ticketId: "t1", subject: "password: hunter2" } },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          ),
+      }
+    );
+    const result = await handleTool("superops_tickets_get", { ticketId: "t1" }, client, config);
+    expect(result.content[0]?.text).not.toContain("hunter2");
+    expect(result.content[0]?.text).toContain("[redacted]");
+  });
+
+  it("normalizes list hasMore true and null through tool output", async () => {
+    const config = loadConfig(stdioEnv);
+    const responses = [
+      {
+        getTicketList: {
+          tickets: [{ ticketId: "1" }],
+          listInfo: { page: 1, pageSize: 25, hasMore: true, totalCount: 26 },
+        },
+      },
+      {
+        getTicketList: {
+          tickets: [{ ticketId: "2" }],
+          listInfo: { page: 2, pageSize: 25, hasMore: null, totalCount: 26 },
+        },
+      },
+    ];
+    let call = 0;
+    const client = new SuperOpsClient(
+      { apiToken: "t", subdomain: "d", region: "us" },
+      {
+        requestTimeoutMs: 1000,
+        maxReadRetries: 1,
+        maxRetryDurationMs: 1000,
+        fetchImpl: async () => {
+          const data = responses[call] ?? responses[1];
+          call += 1;
+          return new Response(JSON.stringify({ data }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        },
+      }
+    );
+    const first = JSON.parse(
+      (await handleTool("superops_tickets_list", { page: 1 }, client, config)).content[0]?.text ?? "{}"
+    ) as { getTicketList: { listInfo: { hasMore: boolean } } };
+    const last = JSON.parse(
+      (await handleTool("superops_tickets_list", { page: 2 }, client, config)).content[0]?.text ?? "{}"
+    ) as { getTicketList: { listInfo: { hasMore: boolean } } };
+    expect(first.getTicketList.listInfo.hasMore).toBe(true);
+    expect(last.getTicketList.listInfo.hasMore).toBe(false);
+  });
 });

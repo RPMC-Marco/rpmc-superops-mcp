@@ -22,7 +22,7 @@ export const CAPABILITIES: Capability[] = [
   {
     name: "rpmc_status",
     description:
-      "Show RPMC MCP status: read-only mode, region, and whether SuperOps env credentials are configured. Does not return secrets.",
+      "Show RPMC MCP status: read-only mode, region, build commit if injected, and whether SuperOps env credentials are configured. Does not return secrets.",
     classification: "read",
     operationKind: "local",
     phase1Registered: true,

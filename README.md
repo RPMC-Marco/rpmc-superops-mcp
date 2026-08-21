@@ -14,6 +14,7 @@ Phase 1: authenticated, read-only, Docker on QNAP (LAN). Write tools are not reg
 - SuperOps credentials only from container/process environment
 - HTTP MCP callers must send `Authorization: Bearer <MCP_AUTH_TOKEN>` (`MCP_AUTH_TOKEN` ≥ 32 characters)
 - stdio does not require `MCP_AUTH_TOKEN`
+- `rpmc_status` reports `commit` from image env `RPM_BUILD_COMMIT` (Docker build-arg `GIT_COMMIT`; local/dev fallback `unknown`). No Git at runtime.
 
 See [docs/MCP-SDK.md](docs/MCP-SDK.md) for Host/Origin policy and the v2 decision.
 

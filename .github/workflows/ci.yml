@@ -35,3 +35,5 @@ jobs:
           push: false
           load: false
           tags: rpmc-superops-mcp:ci
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}

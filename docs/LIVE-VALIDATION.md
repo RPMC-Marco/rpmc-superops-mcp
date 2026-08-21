@@ -1,9 +1,10 @@
 # Live read-only validation
 
-Do not run this against SuperOps until RPMC provides a token out of band.
-Phase 1 live tests must never mutate data. Do not commit credentials.
+Phase 1 live read-only validation against the RPMC SuperOps tenant completed 2026-08-20: **PASS WITH MINOR CORRECTIONS**. Findings are recorded under **RPMC live-confirmed** in `docs/SUPEROPS-API-NOTES.md`. Pagination `hasMore: null` and `superops_tickets_get` nesting were corrected in code after that pass.
 
-This is the next major step after the foundation correction pass. Aggregators (`investigate_ticket`, `investigate_asset`) stay unimplemented until this validation is done.
+This document remains the procedure for a later re-validation. Phase 1 live tests must never mutate data. Do not commit credentials.
+
+Aggregators (`investigate_ticket`, `investigate_asset`) stay unimplemented until a later approved phase.
 
 ## Procedure (operator)
 

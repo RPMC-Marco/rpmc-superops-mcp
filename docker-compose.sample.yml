@@ -1,7 +1,10 @@
 # Sample only. Production compose lives privately on QNAP and is not committed.
 services:
   rpmc-superops-mcp:
-    build: .
+    build:
+      context: .
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     image: rpmc-superops-mcp:local
     ports:
       - "127.0.0.1:8080:8080"
