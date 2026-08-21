@@ -7,17 +7,25 @@ import * as Q from "../superops/queries.js";
 import { auditErrorSummary, toClientSafeError } from "../privacy/errors.js";
 import { attachmentMetadata, sanitizeTicketText } from "../privacy/redact.js";
 import { sanitizeErrorText, sanitizeOutput } from "../privacy/safe-output.js";
+import { investigateAsset } from "../assets/investigate-asset.js";
+import { investigationAuditFromResult } from "../investigate/audit.js";
 import { investigateTicket } from "../tickets/investigate-ticket.js";
+import type { ToolOutcome } from "../audit.js";
 
 export interface ToolResult {
   content: Array<{ type: "text"; text: string }>;
   isError?: boolean;
   auditDetail?: string;
+  audit?: {
+    outcome: ToolOutcome;
+    errorCode?: string;
+    metadata?: Record<string, unknown>;
+  };
 }
 
-export function jsonResult(payload: unknown): ToolResult {
+export function jsonResult(payload: unknown, audit?: ToolResult["audit"]): ToolResult {
   const sanitized = sanitizeOutput(normalizeListPagination(payload));
-  return { content: [{ type: "text", text: JSON.stringify(sanitized.payload, null, 2) }] };
+  return { content: [{ type: "text", text: JSON.stringify(sanitized.payload, null, 2) }], audit };
 }
 
 export function errorResult(message: string): ToolResult {
@@ -44,7 +52,7 @@ export async function handleTool(
       case "rpmc_status":
         return jsonResult({
           product: "rpmc-superops-mcp",
-          version: "0.1.3",
+          version: "0.1.4",
           phase: 1,
           readonly: true,
           writesRegistered: false,
@@ -168,7 +176,12 @@ export async function handleTool(
         return jsonResult(await client.query(Q.GET_TECHNICIAN_GROUP_LIST));
       }
       case "investigate_ticket": {
-        return jsonResult(await investigateTicket(args, client));
+        const payload = await investigateTicket(args, client);
+        return jsonResult(payload, investigationAuditFromResult(payload));
+      }
+      case "investigate_asset": {
+        const payload = await investigateAsset(args, client);
+        return jsonResult(payload, investigationAuditFromResult(payload));
       }
       default:
         return errorResult(`Unknown or unregistered tool: ${name}`);

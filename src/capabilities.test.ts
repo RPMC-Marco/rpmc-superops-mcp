@@ -7,6 +7,7 @@ describe("capability registry", () => {
     expect(registered).toContain("rpmc_status");
     expect(registered).toContain("superops_tickets_get");
     expect(registered).toContain("investigate_ticket");
+    expect(registered).toContain("investigate_asset");
     expect(new Set(registered).size).toBe(registered.length);
   });
 

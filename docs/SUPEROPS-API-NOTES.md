@@ -53,6 +53,26 @@ Independent live read-only validation against the RPMC SuperOps tenant (2026-08-
 - Credential redaction was **not naturally exercised** during live validation (no credential-like strings in sampled human fields). Unit tests still cover redaction. Do not treat live silence as proof that production data is free of secrets
 - Status filtering remains **unvalidated** and is not exposed on the public MCP schema
 
+### `investigate_ticket` (RPMC LIVE-CONFIRMED, 2026-08-20 / 0.1.3)
+
+Treat as suitable for normal read-only use. Do not change the confirmed `displayId` `is` path.
+
+- Ticket lookup by human display number uses `getTicketList` page 1 only:
+  - `condition.attribute = displayId`
+  - `condition.operator = is`
+  - `condition.value = DDMMYY-NNNN` (string, not array)
+- Tested successfully across multiple real RPMC displayIds
+- Successful zero-match correctly maps to `ticket_not_found` / aggregator `code: not_found`
+- Direct internal `ticketId` works
+- DESCRIPTION / `originalBody` behavior works
+- Optional explicit `assetId` enrichment works
+- Ticket-to-asset must **never** be inferred
+- `investigate_ticket` does **not** scan alerts and does not call `getAlertsForAsset`
+- `includes` remains an **unconfirmed fallback** (not exercised live). Keep it only if `is` is rejected by SuperOps. Do not change the confirmed `is` path
+- After a deployed tool-surface change, Cursor may retain a stale `tools/list` catalog. A **full MCP reconnect** refreshes it
+- Freeform ticket bodies (DESCRIPTION / conversations / notes) are sanitized for HTML and credential-like patterns. They are **not** general-purpose email redaction. Emails inside ticket evidence may be technically relevant and are left in place
+- Aggregator asset enrichment omits structured `asset.detail.requester.email` while keeping requester id/name. That is not a global email strip
+
 ### Ticket display number (`displayId`)
 
 RPMC SuperOps ticket display numbers use:
@@ -70,3 +90,28 @@ Examples:
 - `210826-0001` = first ticket 21 August 2026
 
 If the encoded date and SuperOps `createdTime` ever disagree, treat **`createdTime` as authoritative**.
+
+### Asset identifiers
+
+Official `getAsset` requires `AssetIdentifierInput.assetId`. Asset `name`, `hostName`, and `serialNumber` are documented **response** fields on `Asset`. Official field notes do **not** say those attributes can be used in `ListInfoInput.condition` (unlike some Ticket JSON associations that explicitly say a nested field “can be used in the filter condition”).
+
+`investigate_asset` therefore requires the internal numeric `assetId`. Human identifiers are rejected as `human_lookup_unconfirmed` rather than guessed or tenant-scanned. Confirming a server-side name/hostName/serialNumber `is` filter is a later live-validation item if SuperOps documents it.
+
+### Alerts for one asset
+
+Official MSP docs include `getAlertsForAsset(input: AssetDetailsListInput!)` — “Fetches the list of alerts of an asset.” That is the documented asset-scoped query (same input type as software/patches: `assetId` + `listInfo`). RPMC live-confirmed that `Alert.asset.assetId` exists on alert payloads; **`getAlertsForAsset` itself is not yet RPMC live-confirmed**.
+
+`investigate_asset` uses a single page of `getAlertsForAsset` (page 1, pageSize 25). It does **not** call tenant-wide `getAlertList` and does not walk pages. Optional `listInfo.sort` of `createdTime DESC` is documented `SortInput` generally; whether Alert accepts that attribute is unconfirmed and is retried without sort if rejected.
+
+Do not implement a public probe-only alert-filter tool.
+
+### Audit logs
+
+MCP stderr audit lines are JSON `mcp.tool_call` records.
+
+- `success` = the tool achieved its intended result (`outcome === complete`)
+- `outcome` = `complete` | `partial` | `failed`
+- Aggregator failed/partial investigations are `success: false` even when the MCP handler returns structured JSON (`isError` is false)
+- Primitive reads without an investigation payload: `success` follows `!isError`, `outcome` is `complete` or `failed`
+
+Audit metadata is a whitelist (resolution method, section state, truncation, logical operations, safe upstream category). It must not include ticket/alert bodies, subjects, requester/customer names, emails, IP addresses, tokens, or raw SuperOps bodies.

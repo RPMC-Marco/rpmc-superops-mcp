@@ -20,5 +20,6 @@ Classification used in this repository:
 | `src/config.ts` `cleanCredential` | WYRE `src/client.ts` @ d3f900c | Substantially adapted | Placeholder stripping. |
 | Docker | WYRE/Computask Dockerfiles | Design inspiration | Node 24, no GitHub Packages, non-root. RPMC wrote the Dockerfile. |
 | Capability registry, caller auth, Host/Origin policy, safe-output walk | RPMC | Independently implemented | Phase 1 does not register write or mutation-kind tools. |
+| `src/tickets/investigate-ticket.ts`, `src/assets/investigate-asset.ts`, investigation audit | RPMC | Independently implemented | Read-only aggregators; `getAlertsForAsset` from official MSP docs. |
 
 Servosity/msp-skills was **not** copied. It informed live-API notes in `docs/SUPEROPS-API-NOTES.md`.

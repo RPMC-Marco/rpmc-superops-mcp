@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { SuperOpsError, SuperOpsHttpError } from "../superops/errors.js";
 import type { SuperOpsClient } from "../superops/client.js";
+import { buildToolCallAudit } from "../audit.js";
+import { investigationAuditFromResult } from "../investigate/audit.js";
 import {
   CONVERSATION_ITEM_LIMIT,
   DISPLAY_ID_LOOKUP_PAGE_SIZE,
@@ -57,7 +59,7 @@ describe("investigateTicket", () => {
               type: "DESCRIPTION",
               time: "2026-08-20T05:08:32.988",
               user: { userId: "u1", name: "Bot", email: "hide@example.com" },
-              content: "<p>Low disk</p>",
+              content: "<p>Low disk — contact ops@client.com</p>",
             },
             {
               conversationId: "r1",
@@ -96,6 +98,7 @@ describe("investigateTicket", () => {
     expect((result.ticket as { site: { id: string } }).site.id).toBe("s1");
     expect((result.originalBody as { content: string; conversationId: string }).conversationId).toBe("d1");
     expect((result.originalBody as { content: string }).content).toContain("Low disk");
+    expect((result.originalBody as { content: string }).content).toContain("ops@client.com");
     expect(JSON.stringify(result.originalBody)).not.toContain("hide@example.com");
     const conversations = result.conversations as { items: Array<{ conversationId: string; type: string }> };
     expect(conversations.items.map((item) => item.conversationId)).toEqual(["r1"]);
@@ -110,6 +113,7 @@ describe("investigateTicket", () => {
     expect(JSON.stringify(input)).not.toMatch(/createdTime/);
     expect(calls.filter((call) => call.query.includes("getTicketList"))).toHaveLength(1);
     expect(calls.some((call) => call.query.includes("getAlertList"))).toBe(false);
+    expect(calls.some((call) => call.query.includes("getAlertsForAsset"))).toBe(false);
   });
 
   it("falls back once to includes when is is rejected, still requiring exact displayId", async () => {
@@ -299,7 +303,12 @@ describe("investigateTicket", () => {
       if (query.includes("getTicketNoteList")) return { getTicketNoteList: [] };
       if (query.includes("query getAsset(")) {
         return {
-          getAsset: { assetId: "a1", name: "PC", client: { accountId: "c-other", name: "B" } },
+          getAsset: {
+            assetId: "a1",
+            name: "PC",
+            client: { accountId: "c-other", name: "B" },
+            requester: { userId: "u9", name: "Pat Lee", email: "pat@client.com" },
+          },
         };
       }
       if (query.includes("getAssetSoftwareList")) {
@@ -336,6 +345,11 @@ describe("investigateTicket", () => {
       patches: { items: Array<{ installationStatus: string }> };
     };
     expect(asset.status).toBe("ok");
+    expect((result.asset as { detail: { requester: { name?: string; email?: string } } }).detail.requester).toEqual({
+      userId: "u9",
+      name: "Pat Lee",
+    });
+    expect(JSON.stringify(result.asset)).not.toContain("pat@client.com");
     expect(asset.alerts.status).toBe("unavailable");
     expect(asset.software.truncated).toBe(true);
     expect(asset.patches.items.map((item) => item.installationStatus)).toEqual(["NewOrMissing"]);
@@ -363,5 +377,88 @@ describe("investigateTicket", () => {
     const result = await investigateTicket({ ticket: "" }, client);
     expect(result.status).toBe("failed");
     expect(result.code).toBe("malformed_ticket");
+  });
+
+  it("emits complete/partial/failed audit records without customer content", async () => {
+    const completeClient = fakeClient((query) => {
+      if (query.includes("getTicketList")) return ticketList([{ ticketId: "t-internal", displayId: "200826-0001" }]);
+      if (query.includes("query getTicket(")) {
+        return ticketGet({ ticketId: "t-internal", displayId: "200826-0001", subject: "SECRET SUBJECT" });
+      }
+      if (query.includes("getTicketConversationList")) {
+        return {
+          getTicketConversationList: [
+            {
+              conversationId: "d1",
+              type: "DESCRIPTION",
+              time: "2026-08-20T05:08:32.988",
+              content: "Please email ada@client.com",
+            },
+          ],
+        };
+      }
+      if (query.includes("getTicketNoteList")) return { getTicketNoteList: [] };
+      throw new Error("unexpected");
+    });
+    const completePayload = await investigateTicket({ ticket: "200826-0001" }, completeClient);
+    const completeAudit = investigationAuditFromResult(completePayload);
+    const completeEvent = buildToolCallAudit({
+      toolName: "investigate_ticket",
+      classification: "read",
+      operationKind: "query",
+      durationMs: 15,
+      isError: false,
+      argumentKeys: ["ticket"],
+      investigation: completeAudit,
+    });
+    expect(completeEvent.success).toBe(true);
+    expect(completeEvent.outcome).toBe("complete");
+    expect(completeEvent.metadata?.resolution).toBe("displayId_condition_is");
+    expect(completeEvent.metadata?.logicalOperations).toEqual([
+      "getTicketList",
+      "getTicket",
+      "getTicketConversationList",
+      "getTicketNoteList",
+    ]);
+    expect(JSON.stringify(completeEvent)).not.toContain("SECRET SUBJECT");
+    expect(JSON.stringify(completeEvent)).not.toContain("ada@client.com");
+    expect(JSON.stringify(completeEvent)).not.toContain("Please email");
+
+    const partialClient = fakeClient((query) => {
+      if (query.includes("query getTicket(")) return ticketGet({ ticketId: "t1", displayId: "200826-0001" });
+      if (query.includes("getTicketConversationList")) throw new SuperOpsError("conversations down");
+      if (query.includes("getTicketNoteList")) return { getTicketNoteList: [] };
+      throw new Error("unexpected");
+    });
+    const partialEvent = buildToolCallAudit({
+      toolName: "investigate_ticket",
+      classification: "read",
+      operationKind: "query",
+      durationMs: 11,
+      isError: false,
+      argumentKeys: ["ticket"],
+      investigation: investigationAuditFromResult(await investigateTicket({ ticket: "t1" }, partialClient)),
+    });
+    expect(partialEvent.success).toBe(false);
+    expect(partialEvent.outcome).toBe("partial");
+    expect(partialEvent.errorCode).toBe("conversations_unavailable");
+
+    const failedEvent = buildToolCallAudit({
+      toolName: "investigate_ticket",
+      classification: "read",
+      operationKind: "query",
+      durationMs: 4,
+      isError: false,
+      argumentKeys: ["ticket"],
+      investigation: investigationAuditFromResult(
+        await investigateTicket({ ticket: "200826-0001" }, fakeClient((query) => {
+          if (query.includes("getTicketList")) return ticketList([]);
+          throw new Error("must not get ticket");
+        }))
+      ),
+    });
+    expect(failedEvent.success).toBe(false);
+    expect(failedEvent.outcome).toBe("failed");
+    expect(failedEvent.errorCode).toBe("not_found");
   });
 });

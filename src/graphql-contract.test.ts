@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ALL_QUERY_DOCUMENTS, GET_TECHNICIAN_LIST, GET_TICKET, GET_TICKET_LIST } from "./superops/queries.js";
+import { ALL_QUERY_DOCUMENTS, GET_ALERTS_FOR_ASSET, GET_TECHNICIAN_LIST, GET_TICKET, GET_TICKET_LIST } from "./superops/queries.js";
 
 const NESTED_ASSOCIATION = /\b(client|site|requester|technician|techGroup|sla|asset)\s*\{/;
 
@@ -26,5 +26,11 @@ describe("graphql contracts", () => {
 
   it("uses official getTechnicianList.userList", () => {
     expect(GET_TECHNICIAN_LIST).toMatch(/\buserList\b/);
+  });
+
+  it("scopes asset alerts through official getAlertsForAsset, not a tenant-wide list", () => {
+    expect(GET_ALERTS_FOR_ASSET).toMatch(/getAlertsForAsset/);
+    expect(GET_ALERTS_FOR_ASSET).toMatch(/AssetDetailsListInput/);
+    expect(GET_ALERTS_FOR_ASSET).not.toMatch(/getAlertList/);
   });
 });

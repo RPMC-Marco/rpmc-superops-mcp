@@ -74,6 +74,16 @@ describe("mcp server tools/list", () => {
     expect(schema).not.toMatch(/status/);
     expect(schema).not.toMatch(/createdTime/);
   });
+
+  it("registers investigate_asset with assetId only", () => {
+    const tool = listMcpTools().find((item) => item.name === "investigate_asset");
+    expect(tool).toBeDefined();
+    const schema = JSON.stringify(tool?.inputSchema);
+    expect(schema).toMatch(/assetId/);
+    expect(schema).not.toMatch(/hostName/);
+    expect(schema).not.toMatch(/serialNumber/);
+    expect(schema).not.toMatch(/status/);
+  });
 });
 
 describe("handlers", () => {
@@ -270,5 +280,100 @@ describe("handlers", () => {
     ) as { getTicketList: { listInfo: { hasMore: boolean } } };
     expect(first.getTicketList.listInfo.hasMore).toBe(true);
     expect(last.getTicketList.listInfo.hasMore).toBe(false);
+  });
+
+  it("attaches privacy-safe investigation audit on investigate_ticket without marking isError", async () => {
+    const config = loadConfig(stdioEnv);
+    const client = new SuperOpsClient(
+      { apiToken: "t", subdomain: "d", region: "us" },
+      {
+        requestTimeoutMs: 1000,
+        maxReadRetries: 1,
+        maxRetryDurationMs: 1000,
+        fetchImpl: async (_url, init) => {
+          const body = String(init?.body ?? "");
+          if (body.includes("getTicketList")) {
+            return new Response(
+              JSON.stringify({
+                data: { getTicketList: { tickets: [], listInfo: { page: 1, pageSize: 5, hasMore: false, totalCount: 0 } } },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } }
+            );
+          }
+          throw new Error(body.slice(0, 80));
+        },
+      }
+    );
+    const result = await handleTool("investigate_ticket", { ticket: "200826-0001" }, client, config);
+    expect(result.isError).toBeFalsy();
+    expect(result.audit?.outcome).toBe("failed");
+    expect(result.audit?.errorCode).toBe("not_found");
+    expect(JSON.stringify(result.audit)).not.toMatch(/@/);
+  });
+
+  it("sends getAlertsForAsset for investigate_asset and leaves primitive alert list unchanged", async () => {
+    const bodies: string[] = [];
+    const config = loadConfig(stdioEnv);
+    const assetId = "9001114136934215681";
+    const client = new SuperOpsClient(
+      { apiToken: "t", subdomain: "d", region: "us" },
+      {
+        requestTimeoutMs: 1000,
+        maxReadRetries: 1,
+        maxRetryDurationMs: 1000,
+        fetchImpl: async (_url, init) => {
+          const body = String(init?.body ?? "");
+          bodies.push(body);
+          if (body.includes("query getAsset(")) {
+            return new Response(JSON.stringify({ data: { getAsset: { assetId, name: "PC" } } }), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          if (body.includes("getAssetSoftwareList")) {
+            return new Response(
+              JSON.stringify({
+                data: { getAssetSoftwareList: { assetSoftwares: [], listInfo: { page: 1, pageSize: 25, hasMore: false, totalCount: 0 } } },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } }
+            );
+          }
+          if (body.includes("getAssetPatchDetails")) {
+            return new Response(
+              JSON.stringify({
+                data: { getAssetPatchDetails: { assetPatches: [], listInfo: { page: 1, pageSize: 100, hasMore: false, totalCount: 0 } } },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } }
+            );
+          }
+          if (body.includes("getAlertsForAsset")) {
+            return new Response(
+              JSON.stringify({
+                data: { getAlertsForAsset: { alerts: [], listInfo: { page: 1, pageSize: 25, hasMore: false, totalCount: 0 } } },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } }
+            );
+          }
+          if (body.includes("getAlertList")) {
+            return new Response(
+              JSON.stringify({
+                data: { getAlertList: { alerts: [], listInfo: { page: 1, pageSize: 25, hasMore: false, totalCount: 0 } } },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } }
+            );
+          }
+          throw new Error(body.slice(0, 80));
+        },
+      }
+    );
+    const investigated = await handleTool("investigate_asset", { assetId }, client, config);
+    expect(investigated.isError).toBeFalsy();
+    expect(investigated.audit?.outcome).toBe("complete");
+    expect(bodies.some((item) => item.includes("getAlertsForAsset"))).toBe(true);
+    expect(bodies.some((item) => item.includes("getAlertList"))).toBe(false);
+    bodies.length = 0;
+    await handleTool("superops_alerts_list", { page: 1 }, client, config);
+    expect(bodies.some((item) => item.includes("getAlertList"))).toBe(true);
+    expect(bodies.some((item) => item.includes("getAlertsForAsset"))).toBe(false);
   });
 });

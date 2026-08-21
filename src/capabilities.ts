@@ -100,6 +100,17 @@ export const CAPABILITIES: Capability[] = [
     }),
   },
   {
+    name: "investigate_asset",
+    description:
+      "Gather a bounded, sanitized read-only evidence package for one endpoint. Requires the SuperOps internal assetId. Asset name/hostName/serialNumber are not documented as server-side filter attributes and are not used as lookup keys. Does not diagnose. Does not write.",
+    classification: "read",
+    operationKind: "query",
+    phase1Registered: true,
+    inputSchema: z.object({
+      assetId: z.string(),
+    }),
+  },
+  {
     name: "superops_assets_list",
     description: "List SuperOps assets/endpoints.",
     classification: "read",

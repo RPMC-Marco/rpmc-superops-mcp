@@ -1,34 +1,38 @@
 import type { SuperOpsClient } from "../superops/client.js";
-import {
-  SuperOpsError,
-  SuperOpsHttpError,
-  SuperOpsMalformedResponseError,
-  SuperOpsRateLimitError,
-  SuperOpsTimeoutError,
-} from "../superops/errors.js";
+import { SuperOpsMalformedResponseError } from "../superops/errors.js";
 import * as Q from "../superops/queries.js";
 import { toClientSafeError } from "../privacy/errors.js";
 import { attachmentMetadata, sanitizeTicketText } from "../privacy/redact.js";
+import { boundPatches, boundSoftware, PATCH_PAGE_SIZE, SOFTWARE_PAGE_SIZE } from "../investigate/bounds.js";
+import {
+  asArray,
+  asRecord,
+  accountIdFrom,
+  failureCode,
+  isFilterConditionRejected,
+  noticeFromError,
+  omitRequesterEmail,
+  omitStructuredEmail,
+  timeMs,
+  upstreamFailureCategory,
+  type InvestigateNotice,
+  type InvestigateStatus,
+} from "../investigate/common.js";
 import { classifyTicketRef } from "./ticket-ref.js";
 
 export const DISPLAY_ID_LOOKUP_PAGE_SIZE = 5;
 export const CONVERSATION_ITEM_LIMIT = 24;
 export const NOTE_ITEM_LIMIT = 25;
-export const SOFTWARE_PAGE_SIZE = 25;
-export const PATCH_PAGE_SIZE = 100;
-export const PATCH_NON_INSTALLED_LIMIT = 15;
+export { SOFTWARE_PAGE_SIZE, PATCH_PAGE_SIZE, PATCH_NON_INSTALLED_LIMIT } from "../investigate/bounds.js";
 
-export type InvestigateStatus = "complete" | "partial" | "failed";
+export type { InvestigateStatus };
 export type ResolutionMethod =
   | "displayId_condition_is"
   | "displayId_condition_includes"
   | "ticketId_direct"
   | "unresolved";
 
-export interface InvestigateNotice {
-  code: string;
-  message: string;
-}
+export type { InvestigateNotice };
 
 export interface InvestigateTicketArgs {
   ticket?: unknown;
@@ -46,44 +50,13 @@ interface SectionState {
   alerts: "not_requested" | "unavailable";
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
-
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function timeMs(value: unknown): number {
-  if (typeof value !== "string" || !value) return 0;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function accountIdFrom(value: unknown): string | undefined {
-  const rec = asRecord(value);
-  return typeof rec.accountId === "string" && rec.accountId ? rec.accountId : undefined;
-}
-
-function omitEmail(value: unknown): unknown {
-  if (!value || typeof value !== "object") return value;
-  if (Array.isArray(value)) return value.map(omitEmail);
-  const rec = value as Record<string, unknown>;
-  const out: Record<string, unknown> = {};
-  for (const [key, child] of Object.entries(rec)) {
-    if (key === "email") continue;
-    out[key] = omitEmail(child);
-  }
-  return out;
-}
-
 function sanitizeConversationItem(item: unknown) {
   const rec = asRecord(item);
   const sanitized = sanitizeTicketText(rec.content);
   return {
     conversationId: rec.conversationId,
     time: rec.time,
-    user: omitEmail(rec.user),
+    user: omitStructuredEmail(rec.user),
     type: rec.type,
     content: sanitized.text,
     redaction: {
@@ -100,7 +73,7 @@ function sanitizeNoteItem(item: unknown) {
   const sanitized = sanitizeTicketText(rec.content);
   return {
     noteId: rec.noteId,
-    addedBy: omitEmail(rec.addedBy),
+    addedBy: omitStructuredEmail(rec.addedBy),
     addedOn: rec.addedOn,
     privacyType: rec.privacyType,
     content: sanitized.text,
@@ -117,25 +90,6 @@ function isDescription(item: { type?: unknown }): boolean {
   return String(item.type ?? "").toUpperCase() === "DESCRIPTION";
 }
 
-function isFilterConditionRejected(error: unknown): boolean {
-  if (!(error instanceof SuperOpsError)) return false;
-  const blob = `${error.code ?? ""} ${error.message}`.toLowerCase();
-  if (/\brate[-\s]?limit|too many requests|throttl/.test(blob)) return false;
-  return true;
-}
-
-function failureCode(error: unknown): string {
-  if (error instanceof SuperOpsRateLimitError) return "rate_limited";
-  if (error instanceof SuperOpsTimeoutError) return "timeout";
-  if (error instanceof SuperOpsHttpError) return "unavailable";
-  if (error instanceof SuperOpsMalformedResponseError) return "unavailable";
-  return "lookup_failed";
-}
-
-function noticeFromError(code: string, error: unknown): InvestigateNotice {
-  return { code, message: toClientSafeError(error) };
-}
-
 function failedResult(input: {
   suppliedTicket: string;
   suppliedAssetId?: string;
@@ -147,6 +101,7 @@ function failedResult(input: {
   errors?: InvestigateNotice[];
   warnings?: InvestigateNotice[];
   candidates?: Array<{ ticketId?: unknown; displayId?: unknown }>;
+  upstreamFailureCategory?: string;
 }): Record<string, unknown> {
   return {
     status: "failed" as InvestigateStatus,
@@ -173,6 +128,7 @@ function failedResult(input: {
       },
       truncated: {},
       logicalOperations: input.logicalOperations,
+      upstreamFailureCategory: input.upstreamFailureCategory ?? input.code,
     },
   };
 }
@@ -183,7 +139,7 @@ export async function resolveDisplayId(
   operations: string[]
 ): Promise<
   | { ok: true; ticketId: string; displayId: string; method: ResolutionMethod }
-  | { ok: false; code: string; message: string; method: ResolutionMethod; candidates?: Array<Record<string, unknown>> }
+  | { ok: false; code: string; message: string; method: ResolutionMethod; candidates?: Array<Record<string, unknown>>; upstreamFailureCategory?: string }
 > {
   const tryList = async (operator: "is" | "includes", value: unknown) => {
     operations.push("getTicketList");
@@ -204,7 +160,13 @@ export async function resolveDisplayId(
     listData = await tryList("is", displayId);
   } catch (error) {
     if (!isFilterConditionRejected(error)) {
-      return { ok: false, code: failureCode(error), message: toClientSafeError(error), method: "unresolved" };
+      return {
+        ok: false,
+        code: failureCode(error),
+        message: toClientSafeError(error),
+        method: "unresolved",
+        upstreamFailureCategory: upstreamFailureCategory(error),
+      };
     }
     try {
       method = "displayId_condition_includes";
@@ -215,6 +177,7 @@ export async function resolveDisplayId(
         code: "resolution_unavailable",
         message: toClientSafeError(fallbackError),
         method: "unresolved",
+        upstreamFailureCategory: upstreamFailureCategory(fallbackError),
       };
     }
   }
@@ -304,31 +267,6 @@ function boundNotes(rawItems: unknown[]): {
   return { items: newestFirst.slice(0, NOTE_ITEM_LIMIT), truncated, totalCount: sanitized.length };
 }
 
-function boundPatches(payload: Record<string, unknown>) {
-  const details = asRecord(payload.getAssetPatchDetails);
-  const patches = asArray(details.assetPatches).map(asRecord);
-  const listInfo = asRecord(details.listInfo);
-  const byInstallationStatus: Record<string, number> = {};
-  for (const patch of patches) {
-    const status = typeof patch.installationStatus === "string" ? patch.installationStatus : "unknown";
-    byInstallationStatus[status] = (byInstallationStatus[status] ?? 0) + 1;
-  }
-  const notable = patches
-    .filter((patch) => patch.installationStatus !== "Installed")
-    .slice(0, PATCH_NON_INSTALLED_LIMIT);
-  const hasMore = listInfo.hasMore === true;
-  return {
-    summary: {
-      returned: patches.length,
-      totalCount: listInfo.totalCount ?? null,
-      hasMore,
-      byInstallationStatus,
-    },
-    items: notable,
-    truncated: hasMore || notable.length === PATCH_NON_INSTALLED_LIMIT,
-  };
-}
-
 export async function investigateTicket(
   args: InvestigateTicketArgs,
   client: SuperOpsClient
@@ -378,6 +316,7 @@ export async function investigateTicket(
         resolution: resolved.method,
         logicalOperations,
         candidates: resolved.candidates,
+        upstreamFailureCategory: resolved.upstreamFailureCategory ?? resolved.code,
       });
     }
     ticketId = resolved.ticketId;
@@ -397,6 +336,7 @@ export async function investigateTicket(
       message: toClientSafeError(error),
       resolution,
       logicalOperations,
+      upstreamFailureCategory: upstreamFailureCategory(error),
     });
   }
   sections.ticket = "ok";
@@ -465,7 +405,7 @@ export async function investigateTicket(
     software: null,
     patches: null,
     alerts: assetRequested
-      ? { status: "unavailable", reason: "asset_alert_filter_not_confirmed" }
+      ? { status: "unavailable", reason: "asset_alert_filter_not_used_from_investigate_ticket" }
       : { status: "not_requested" },
   };
 
@@ -473,7 +413,7 @@ export async function investigateTicket(
     try {
       logicalOperations.push("getAsset");
       const data = asRecord(await client.query(Q.GET_ASSET, { input: { assetId: suppliedAssetId } }));
-      const detail = asRecord(data.getAsset ?? data);
+      const detail = omitRequesterEmail(asRecord(data.getAsset ?? data));
       if (typeof detail.assetId !== "string" || !detail.assetId) {
         throw new SuperOpsMalformedResponseError("getAsset returned no assetId");
       }
@@ -509,22 +449,9 @@ export async function investigateTicket(
             input: { assetId: suppliedAssetId, listInfo: { page: 1, pageSize: SOFTWARE_PAGE_SIZE } },
           })
         );
-        const list = asRecord(data.getAssetSoftwareList);
-        const listInfo = asRecord(list.listInfo);
-        const items = asArray(list.assetSoftwares);
-        const truncated = listInfo.hasMore === true;
-        sections.software = truncated ? "truncated" : "ok";
-        asset = {
-          ...asset,
-          software: {
-            items,
-            returned: items.length,
-            totalCount: listInfo.totalCount ?? null,
-            hasMore: listInfo.hasMore === true,
-            truncated,
-            limit: SOFTWARE_PAGE_SIZE,
-          },
-        };
+        const software = boundSoftware(data);
+        sections.software = software.truncated ? "truncated" : "ok";
+        asset = { ...asset, software };
       } catch (error) {
         sections.software = "failed";
         errors.push(noticeFromError("software_unavailable", error));
@@ -537,9 +464,9 @@ export async function investigateTicket(
             input: { assetId: suppliedAssetId, listInfo: { page: 1, pageSize: PATCH_PAGE_SIZE } },
           })
         );
-        const bounded = boundPatches(data);
-        sections.patches = bounded.truncated ? "truncated" : "ok";
-        asset = { ...asset, patches: bounded };
+        const patches = boundPatches(data);
+        sections.patches = patches.truncated ? "truncated" : "ok";
+        asset = { ...asset, patches };
       } catch (error) {
         sections.patches = "failed";
         errors.push(noticeFromError("patches_unavailable", error));

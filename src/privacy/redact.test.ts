@@ -22,6 +22,12 @@ describe("privacy", () => {
     expect(result.text).toBe("Printer offline in building B");
   });
 
+  it("does not treat freeform email addresses as credentials", () => {
+    const result = sanitizeTicketText("Please reply to ops@client.com about the outage");
+    expect(result.credentialsRedacted).toBe(false);
+    expect(result.text).toContain("ops@client.com");
+  });
+
   it("redacts bearer tokens", () => {
     const result = redactSecrets("Authorization Bearer abcdefghijklmnop1234");
     expect(result.credentialsRedacted).toBe(true);

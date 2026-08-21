@@ -60,6 +60,10 @@ CI builds the image on every push (no registry publish). Local/QNAP image smoke-
 
 Tool JSON payloads run through a conservative safe-output pass: high-confidence secrets in freeform strings are replaced with `[redacted]` and marked via `_privacy` when anything changed. Conversation/note `content` is also HTML-stripped. Attachments stay metadata-only. Useful technical evidence is kept. This is not DLP.
 
+Freeform ticket/alert bodies are **not** general-purpose email redaction. Emails in DESCRIPTION/conversation/note/alert text may be technically relevant and are left in place. Aggregators omit structured `requester.email` (and similar structured `email` keys on user objects) while keeping id/name.
+
+Stderr audit logs (`mcp.tool_call`) record tool name, `success`, `outcome` (`complete` | `partial` | `failed`), section state, resolution method, truncation, duration, and safe upstream failure category. They must not contain ticket bodies, subjects, names, emails, IPs, tokens, or raw SuperOps responses. A failed or partial investigation is `success: false` with an explicit `outcome`, even when the tool returns structured JSON.
+
 ## License
 
 Apache-2.0. See LICENSE, NOTICE, and THIRD_PARTY_NOTICES.md.

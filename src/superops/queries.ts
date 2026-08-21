@@ -182,8 +182,12 @@ query getAsset($input: AssetIdentifierInput!) {
     hostName
     publicIp
     platform
+    platformFamily
+    platformCategory
+    platformVersion
     status
     lastCommunicatedTime
+    lastReportedTime
     agentVersion
     patchStatus
     deviceCategory
@@ -246,6 +250,26 @@ query GetAlertList($input: ListInfoInput!) {
 }
 `;
 
+export const GET_ALERTS_FOR_ASSET = `
+query getAlertsForAsset($input: AssetDetailsListInput!) {
+  getAlertsForAsset(input: $input) {
+    alerts {
+      id
+      message
+      createdTime
+      status
+      severity
+      description
+      asset
+      policy
+      resolvedTime
+      occurrenceCount
+    }
+    ${LIST_INFO}
+  }
+}
+`;
+
 export const GET_TECHNICIAN_LIST = `
 query getTechnicianList($input: ListInfoInput!) {
   getTechnicianList(input: $input) {
@@ -285,6 +309,7 @@ export const ALL_QUERY_DOCUMENTS = [
   GET_ASSET_SOFTWARE_LIST,
   GET_ASSET_PATCH_DETAILS,
   GET_ALERT_LIST,
+  GET_ALERTS_FOR_ASSET,
   GET_TECHNICIAN_LIST,
   GET_TECHNICIAN_GROUP_LIST,
 ];
