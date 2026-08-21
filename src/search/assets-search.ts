@@ -11,7 +11,7 @@ import {
 } from "../superops/conditions.js";
 import { listInfoInput, queryBoundedList } from "../superops/list-search.js";
 import { asArray, asRecord, omitStructuredEmail, type InvestigateStatus } from "../investigate/common.js";
-import { ASSET_ID_PATTERN } from "../assets/asset-ref.js";
+import { parseAssetId } from "../assets/asset-ref.js";
 
 const FILTER_KEYS = ["assetId", "hostName", "name", "serialNumber", "status", "clientName", "siteName", "unmonitored"];
 
@@ -61,14 +61,15 @@ export async function searchAssets(args: Record<string, unknown>, client: SuperO
   const operands = [];
   const assetId = stringArg(args.assetId);
   if (assetId) {
-    if (!ASSET_ID_PATTERN.test(assetId)) {
+    const parsed = parseAssetId(assetId);
+    if (!parsed.ok) {
       return searchFailed({
-        code: "malformed_input",
-        message: "assetId must be a SuperOps internal numeric ID",
+        code: parsed.code,
+        message: parsed.message,
         logicalOperations,
       });
     }
-    operands.push(exactIs("assetId", assetId));
+    operands.push(exactIs("assetId", parsed.value));
   }
   const hostName = stringArg(args.hostName);
   if (hostName) operands.push(exactIs("hostName", hostName));

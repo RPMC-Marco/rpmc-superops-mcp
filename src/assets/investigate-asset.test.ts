@@ -61,7 +61,7 @@ function emptySupport() {
 }
 
 describe("investigateAsset", () => {
-  it("loads bounded evidence for a numeric assetId without scanning getAlertList", async () => {
+  it("loads bounded evidence for an opaque assetId without scanning getAlertList", async () => {
     const calls: Array<{ query: string; variables?: Record<string, unknown> }> = [];
     const extras = emptySupport();
     extras.getAssetSoftwareList = {
@@ -138,14 +138,15 @@ describe("investigateAsset", () => {
     });
   });
 
-  it("returns malformed_input for a hostname stuffed into assetId", async () => {
-    const client = fakeClient(() => {
-      throw new Error("no SuperOps");
+  it("treats a hostname in assetId as an opaque GraphQL ID and does not rewrite it to hostName", async () => {
+    const client = fakeClient((query) => {
+      if (query.includes("query getAsset(")) throw new SuperOpsError("nope");
+      throw new Error("unexpected");
     });
     const result = await investigateAsset({ assetId: "DESKTOP-9J8RLGD" }, client);
     expect(result.status).toBe("failed");
-    expect(result.code).toBe("malformed_input");
-    expect((result.provenance as { resolution: string }).resolution).toBe("unresolved");
+    expect(result.code).toBe("lookup_failed");
+    expect(result.code).not.toBe("not_found");
   });
 
   it("returns malformed_asset for empty identifiers", async () => {
@@ -294,7 +295,27 @@ describe("investigateAsset", () => {
     expect((result.provenance as { sections: { alerts: string } }).sections.alerts).toBe("unavailable");
   });
 
-  it("does not guess among human identifiers stuffed into assetId", async () => {
+  it("accepts a short opaque GraphQL ID example", async () => {
+    const client = fakeClient((query) => {
+      if (query.includes("query getAsset(")) {
+        return {
+          getAsset: {
+            ...assetGet().getAsset,
+            assetId: "4",
+          },
+        };
+      }
+      if (query.includes("getAssetSoftwareList")) return { getAssetSoftwareList: emptySupport().getAssetSoftwareList };
+      if (query.includes("getAssetPatchDetails")) return { getAssetPatchDetails: emptySupport().getAssetPatchDetails };
+      if (query.includes("getAlertsForAsset")) return { getAlertsForAsset: emptySupport().getAlertsForAsset };
+      throw new Error("unexpected");
+    });
+    const result = await investigateAsset({ assetId: "4" }, client);
+    expect(result.status).toBe("complete");
+    expect((result.asset as { assetId: string }).assetId).toBe("4");
+  });
+
+  it("rejects whitespace inside assetId rather than guessing a human identifier", async () => {
     const result = await investigateAsset({ assetId: "Acme Laptop" }, fakeClient(() => {
       throw new Error("no SuperOps");
     }));
@@ -332,6 +353,23 @@ describe("investigateAsset", () => {
     expect(listInput.condition).toEqual({ attribute: "hostName", operator: "is", value: "DESKTOP-9J8RLGD" });
     expect(calls.filter((call) => call.query.includes("getAssetList"))).toHaveLength(1);
     expect(JSON.stringify(calls.map((call) => call.variables))).not.toMatch(/"page":\s*2/);
+  });
+
+  it("returns ambiguous when a single hostName match is not proven unique because more pages exist", async () => {
+    const client = fakeClient((query) => {
+      if (query.includes("getAssetList")) {
+        return {
+          getAssetList: {
+            assets: [{ assetId: "a1", hostName: "DESKTOP-9J8RLGD" }],
+            listInfo: { page: 1, pageSize: 5, hasMore: true, totalCount: 6 },
+          },
+        };
+      }
+      throw new Error("must not getAsset");
+    });
+    const result = await investigateAsset({ hostName: "DESKTOP-9J8RLGD" }, client);
+    expect(result.status).toBe("failed");
+    expect(result.code).toBe("ambiguous");
   });
 
   it("returns ambiguous when two assets share the same hostName", async () => {

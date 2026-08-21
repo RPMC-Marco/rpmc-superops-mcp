@@ -351,6 +351,10 @@ export async function investigateAsset(
     };
   }
 
+  // complete = asset loaded and confirmed-class enrichment did not fail.
+  // summary/activity/software/patches are required for complete.
+  // alerts use unconfirmed getAlertsForAsset; unavailable does not flip partial.
+  // After RPMC live-confirms getAlertsForAsset, treat alert query failure like software (failed → partial).
   const supportingFailed = [sections.summary, sections.activity, sections.software, sections.patches].some(
     (section) => section === "failed"
   );

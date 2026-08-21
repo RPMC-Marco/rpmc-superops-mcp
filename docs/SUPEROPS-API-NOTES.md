@@ -93,11 +93,25 @@ If the encoded date and SuperOps `createdTime` ever disagree, treat **`createdTi
 
 ### Asset identifiers
 
-Official `getAsset` requires `AssetIdentifierInput.assetId` (numeric ID). Help Center documents string operator `is` for ListInfoInput attribute paths. Asset `name`, `hostName`, and `serialNumber` are official String fields, so exact `is` lookups are implemented as **documented candidates** (page 1, size 5, local exact match, `ambiguous` if duplicates). They are **not** RPMC live-confirmed yet. `contains` / fuzzy matching is not used. A hostname must be passed as `hostName`, not stuffed into `assetId`.
+Official `getAsset` requires `AssetIdentifierInput.assetId`, typed as GraphQL `ID!`. The schema does **not** say IDs are numeric or have a minimum length. Official examples are often long digit strings (`"9001114136934215681"`); `ClientIdentifierInput` even examples `"4"`. Those are examples, not validation rules.
 
-### Client identifiers
+Public `assetId` is therefore an opaque non-empty ID (whitespace rejected). Human identifiers are separate fields (`hostName`, `name`, `serialNumber`) and are not inferred from `assetId` format. A hostname passed as `assetId` is sent to `getAsset`; opaque failures stay `lookup_failed` / `unavailable`, never `not_found`.
 
-`Client.name` is an official String field. `emailDomains` is `[String]`; Help Center `includes` takes an array for multi-valued attributes. `getClient` remains the accountId path. Exact name / domain resolution is implemented, not live-confirmed.
+Help Center documents string operator `is` for ListInfoInput attribute paths. Asset `name`, `hostName`, and `serialNumber` exact `is` lookups are **documented candidates** (page 1, size 5, local exact match, `ambiguous` if duplicates or `hasMore`). They are **not** RPMC live-confirmed yet. `contains` / fuzzy matching is not used.
+
+### Client identifiers and `investigate_client` scoping
+
+`Client.name` is an official String field. SuperOps does **not** document that client names are unique. `emailDomains` is `[String]`; Help Center `includes` takes an array for multi-valued attributes. `getClient` remains the accountId path. Exact name / domain resolution is implemented, not live-confirmed. A single match on page 1 with `hasMore: true` is `ambiguous` (uniqueness was not proven).
+
+Official Ticket `client` JSON: “Returns accountId and name fields as JSON. **The name field can be used in the filter condition.**” That is an allowlist of the nested `name` field, not `accountId`. This MCP does **not** invent a `client.accountId` list filter.
+
+`investigate_client` therefore:
+
+- Scopes sites with official `GetClientSiteListInput.clientId`
+- Retrieves a bounded asset/ticket page with documented `client.name` `is` using the resolved client's name
+- Locally keeps only rows whose `client.accountId` equals the resolved accountId
+
+That preserves the invariant that client X's investigation never silently presents another client's records as X. Local pinning of one page cannot invent later-page rows for X; leftover `hasMore` or dropped foreign rows are marked truncated. `superops_tickets_search` / `superops_assets_search` `clientName` remains an honest name search (the caller asked for a name, not an accountId).
 
 ### Sites
 
@@ -108,6 +122,8 @@ Official `getClientSite` / `getClientSiteList`. `GetClientSiteListInput.clientId
 Official MSP docs include `getAlertsForAsset(input: AssetDetailsListInput!)` — “Fetches the list of alerts of an asset.” That is the documented asset-scoped query (same input type as software/patches: `assetId` + `listInfo`). RPMC live-confirmed that `Alert.asset.assetId` exists on alert payloads; **`getAlertsForAsset` itself is not yet RPMC live-confirmed**.
 
 `investigate_asset` uses a single page of `getAlertsForAsset` (page 1, pageSize 25). `superops_alerts_search` with `assetId` uses the same query. Tenant-wide `getAlertList` is used only when searching alerts **without** an assetId, still one page, with explicit filters. Optional `createdTime DESC` sort is documented `SortInput` generally; whether a given list accepts that attribute is unconfirmed and is retried without sort if rejected.
+
+**`investigate_asset` complete vs partial:** `failed` means the asset was not loaded. `partial` means a confirmed-class enrichment query failed (`summary`, `activity`, `software`, `patches`). Truncation of those sections does not by itself make the result partial. `getAlertsForAsset` is documented but not RPMC live-confirmed; an unavailable alerts section does **not** by itself make the investigation partial, and audit `success` still follows `outcome === complete`. Lack of live confirmation does not redefine `complete` on each call. After `getAlertsForAsset` is live-confirmed, treat an alert-query failure like software/patches (`failed` → overall `partial`). Until then, keep alerts optional/isolated.
 
 Constrained ticket/asset/alert search tools never walk additional pages. Rejected filters return `unsupported_filter`.
 

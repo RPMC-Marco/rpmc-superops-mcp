@@ -1,26 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { classifyAssetRef } from "./asset-ref.js";
+import { parseAssetId } from "./asset-ref.js";
 
-describe("classifyAssetRef", () => {
-  it("recognizes numeric SuperOps assetIds", () => {
-    expect(classifyAssetRef("9001114136934215681")).toEqual({
-      kind: "assetId",
-      value: "9001114136934215681",
-    });
+describe("parseAssetId", () => {
+  it("accepts official example IDs and other opaque GraphQL IDs", () => {
+    expect(parseAssetId("9001114136934215681")).toEqual({ ok: true, value: "9001114136934215681" });
+    expect(parseAssetId("4")).toEqual({ ok: true, value: "4" });
+    expect(parseAssetId("  abc-ID_1  ")).toEqual({ ok: true, value: "abc-ID_1" });
   });
 
-  it("treats hostName, name, and serial-like values as unsupported human identifiers", () => {
-    expect(classifyAssetRef("DESKTOP-9J8RLGD").kind).toBe("unsupported_human");
-    expect(classifyAssetRef("FRONT-DESK-PC").kind).toBe("unsupported_human");
-    expect(classifyAssetRef("15CD10509R721").kind).toBe("unsupported_human");
-  });
-
-  it("rejects empty identifiers", () => {
-    expect(classifyAssetRef("").kind).toBe("malformed");
-    expect(classifyAssetRef("   ").kind).toBe("malformed");
-  });
-
-  it("does not guess among spaced names", () => {
-    expect(classifyAssetRef("Acme Laptop").kind).toBe("unsupported_human");
+  it("rejects empty or whitespace-containing values", () => {
+    expect(parseAssetId("").ok).toBe(false);
+    expect(parseAssetId("   ").ok).toBe(false);
+    expect(parseAssetId("9001 1413").ok).toBe(false);
   });
 });

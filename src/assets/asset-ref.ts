@@ -1,26 +1,25 @@
 /**
- * Asset identifier classification.
+ * Explicit `assetId` is a SuperOps GraphQL ID scalar (`AssetIdentifierInput.assetId: ID!`).
  *
- * Official SuperOps `getAsset` requires `AssetIdentifierInput.assetId`.
- * Asset `name`, `hostName`, and `serialNumber` are documented response fields
- * but are NOT documented as ListInfoInput filter attributes. This classifier
- * therefore does not treat those as lookup keys.
+ * Official docs do not guarantee digits or a minimum length. Examples are often long
+ * numeric strings, but that is not a schema contract. Human identifiers (hostName, name,
+ * serialNumber) are separate public fields, so assetId is not disambiguated by format.
+ *
+ * Reject only empty values and values that contain whitespace (not a usable ID).
+ * Opaque getAsset failures remain lookup_failed / unavailable, never not_found.
  */
 
-export type AssetRefKind = "assetId" | "unsupported_human" | "malformed";
-
-export type AssetRef = { kind: AssetRefKind; value: string };
-
-/** Official examples use long numeric IDs; GraphQL type is ID (string). */
-export const ASSET_ID_PATTERN = /^\d{8,}$/;
-
-export function classifyAssetRef(raw: unknown): AssetRef {
+export function parseAssetId(raw: unknown): { ok: true; value: string } | { ok: false; code: "malformed_input"; message: string } {
   const value = typeof raw === "string" ? raw.trim() : "";
   if (!value) {
-    return { kind: "malformed", value: "" };
+    return { ok: false, code: "malformed_input", message: "assetId is required" };
   }
-  if (ASSET_ID_PATTERN.test(value)) {
-    return { kind: "assetId", value };
+  if (/\s/.test(value)) {
+    return {
+      ok: false,
+      code: "malformed_input",
+      message: "assetId must be a SuperOps GraphQL ID without whitespace; use hostName, name, or serialNumber for human identifiers",
+    };
   }
-  return { kind: "unsupported_human", value };
+  return { ok: true, value };
 }

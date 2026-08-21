@@ -24,8 +24,9 @@ See `docs/LIVE-CONFIRMATION-MATRIX.md`. Highlights:
 
 ## C. Useful read capability implemented in this batch (was missing)
 
-- `investigate_asset` human identity + summary/activity
-- `investigate_client`
+- `investigate_asset` human identity + summary/activity. `complete` requires asset plus summary/activity/software/patches; unconfirmed `getAlertsForAsset` unavailability does not by itself make the result partial.
+- `investigate_client` (sites via official `clientId`; assets/tickets via documented `client.name` then local `accountId` pin)
+- Opaque `assetId` (GraphQL `ID`, not a numeric-length rule)
 - `superops_tickets_search`, `superops_assets_search`, `superops_alerts_search`
 - `superops_sites_list` / `get` / `search`
 

@@ -2,8 +2,8 @@ import type { SuperOpsClient } from "../superops/client.js";
 import * as Q from "../superops/queries.js";
 import { exactIs } from "../superops/conditions.js";
 import { listInfoInput, queryBoundedList } from "../superops/list-search.js";
-import { asArray, asRecord } from "../investigate/common.js";
-import { ASSET_ID_PATTERN } from "./asset-ref.js";
+import { asArray, asRecord, boundedLookupNotUnique } from "../investigate/common.js";
+import { parseAssetId } from "./asset-ref.js";
 
 export const ASSET_LOOKUP_PAGE_SIZE = 5;
 
@@ -52,16 +52,20 @@ async function resolveByList(
     };
   }
   const payload = asRecord(asRecord(listed.data).getAssetList);
+  const listInfo = asRecord(payload.listInfo);
   const assets = asArray(payload.assets).map(asRecord);
   const exact = exactFieldMatches(assets, field, value);
   if (exact.length === 0) {
     return { ok: false, code: "not_found", message: `No asset matched ${field}`, method, logicalOperations: operations };
   }
-  if (exact.length > 1) {
+  if (boundedLookupNotUnique(listInfo, exact.length)) {
     return {
       ok: false,
       code: "ambiguous",
-      message: `Multiple assets matched ${field}`,
+      message:
+        exact.length > 1
+          ? `Multiple assets matched ${field}`
+          : `Asset ${field} match was not proven unique because more pages exist`,
       method,
       logicalOperations: operations,
       candidates: exact.map((asset) => ({
@@ -85,16 +89,17 @@ export async function resolveAsset(
 ): Promise<AssetResolution> {
   const operations: string[] = [];
   if (identity.key === "assetId") {
-    if (!ASSET_ID_PATTERN.test(identity.value)) {
+    const parsed = parseAssetId(identity.value);
+    if (!parsed.ok) {
       return {
         ok: false,
-        code: "malformed_input",
-        message: "assetId must be a SuperOps internal numeric ID; use hostName, name, or serialNumber for human identifiers",
+        code: parsed.code,
+        message: parsed.message,
         method: "unresolved",
         logicalOperations: operations,
       };
     }
-    return { ok: true, assetId: identity.value, method: "assetId_direct", logicalOperations: operations };
+    return { ok: true, assetId: parsed.value, method: "assetId_direct", logicalOperations: operations };
   }
   if (identity.key === "hostName" || identity.key === "name" || identity.key === "serialNumber") {
     return resolveByList(client, identity.key, identity.value, operations);

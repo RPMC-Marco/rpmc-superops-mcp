@@ -33,6 +33,30 @@ export function accountIdFrom(value: unknown): string | undefined {
   return typeof rec.accountId === "string" && rec.accountId ? rec.accountId : undefined;
 }
 
+/**
+ * Page-1 identity lookups cannot prove uniqueness when SuperOps reports more pages.
+ * Later pages are not fetched.
+ */
+export function boundedLookupNotUnique(listInfo: Record<string, unknown>, exactMatchCount: number): boolean {
+  if (exactMatchCount !== 1) return exactMatchCount > 1;
+  return listInfo.hasMore === true;
+}
+
+/**
+ * Keep only items whose nested client.accountId matches the resolved client.
+ * Rows with a missing or different accountId are dropped so a name-filtered page
+ * cannot silently attribute another client's records.
+ */
+export function pinItemsToAccountId(items: unknown[], accountId: string): { kept: unknown[]; dropped: number } {
+  const kept: unknown[] = [];
+  let dropped = 0;
+  for (const item of items) {
+    if (accountIdFrom(asRecord(item).client) === accountId) kept.push(item);
+    else dropped += 1;
+  }
+  return { kept, dropped };
+}
+
 /** Strip structured `email` keys only. Does not rewrite freeform text fields. */
 export function omitStructuredEmail(value: unknown): unknown {
   if (!value || typeof value !== "object") return value;

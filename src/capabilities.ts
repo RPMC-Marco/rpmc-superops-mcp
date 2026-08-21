@@ -102,7 +102,7 @@ export const CAPABILITIES: Capability[] = [
   {
     name: "investigate_asset",
     description:
-      "Gather a bounded, sanitized read-only evidence package for one endpoint. Identify the asset with exactly one of assetId, hostName, name, or serialNumber (exact server-side is). Includes summary, recent activity, software, patches, and asset-scoped alerts. Does not diagnose. Does not write.",
+      "Gather a bounded, sanitized read-only evidence package for one endpoint. Identify with exactly one of assetId (opaque GraphQL ID), hostName, name, or serialNumber. Complete requires the asset plus summary, activity, software, and patches. Asset-scoped alerts are attempted via unconfirmed getAlertsForAsset and do not by themselves make the result partial. Does not diagnose. Does not write.",
     classification: "read",
     operationKind: "query",
     phase1Registered: true,
@@ -116,7 +116,7 @@ export const CAPABILITIES: Capability[] = [
   {
     name: "investigate_client",
     description:
-      "Gather bounded read-only context for one client: metadata, sites (clientId-scoped), a page of assets, and a page of tickets. Identify with exactly one of accountId, exact name, or emailDomain. Does not scan the tenant. Does not diagnose.",
+      "Gather bounded read-only context for one client: metadata, sites (official clientId), and a page of assets/tickets. Identify with exactly one of accountId, exact name, or emailDomain. Assets/tickets use the documented client.name filter, then keep only rows whose client.accountId matches the resolved client. Does not scan the tenant. Does not diagnose.",
     classification: "read",
     operationKind: "query",
     phase1Registered: true,

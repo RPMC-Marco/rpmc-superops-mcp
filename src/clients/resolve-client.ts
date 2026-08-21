@@ -2,7 +2,7 @@ import type { SuperOpsClient } from "../superops/client.js";
 import * as Q from "../superops/queries.js";
 import { exactIs, includesValues } from "../superops/conditions.js";
 import { listInfoInput, queryBoundedList } from "../superops/list-search.js";
-import { asArray, asRecord, failureCode, upstreamFailureCategory } from "../investigate/common.js";
+import { asArray, asRecord, boundedLookupNotUnique, failureCode, upstreamFailureCategory } from "../investigate/common.js";
 import { toClientSafeError } from "../privacy/errors.js";
 import { SuperOpsMalformedResponseError } from "../superops/errors.js";
 
@@ -72,6 +72,7 @@ export async function resolveClient(
     };
   }
   const payload = asRecord(asRecord(listed.data).getClientList);
+  const listInfo = asRecord(payload.listInfo);
   const clients = asArray(payload.clients).map(asRecord);
   const exact =
     field === "name"
@@ -80,11 +81,14 @@ export async function resolveClient(
   if (exact.length === 0) {
     return { ok: false, code: "not_found", message: "No client matched the identifier", method, logicalOperations: operations };
   }
-  if (exact.length > 1) {
+  if (boundedLookupNotUnique(listInfo, exact.length)) {
     return {
       ok: false,
       code: "ambiguous",
-      message: "Multiple clients matched the identifier",
+      message:
+        exact.length > 1
+          ? "Multiple clients matched the identifier"
+          : "Client match was not proven unique because more pages exist",
       method,
       logicalOperations: operations,
       candidates: exact.map((item) => ({ accountId: item.accountId, name: item.name })),

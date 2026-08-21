@@ -6,6 +6,7 @@ import {
   asArray,
   asRecord,
   omitStructuredEmail,
+  pinItemsToAccountId,
   type InvestigateNotice,
   type InvestigateStatus,
 } from "../investigate/common.js";
@@ -63,6 +64,8 @@ export async function investigateClient(
   }
 
   const logicalOperations = [...resolved.logicalOperations];
+  const accountId = resolved.accountId;
+  const clientName = typeof resolved.detail.name === "string" ? resolved.detail.name : "";
   const warnings: InvestigateNotice[] = [];
   const errors: InvestigateNotice[] = [];
   const sections = {
@@ -74,11 +77,42 @@ export async function investigateClient(
   };
   const paging = pageClamp(1, 25);
 
+  function attachPinnedPage(
+    listed: { ok: true; data: unknown } | { ok: false; message: string },
+    listKey: "getAssetList" | "getTicketList",
+    itemsKey: "assets" | "tickets",
+    section: "assets" | "tickets",
+    unavailableCode: string
+  ): Record<string, unknown> | null {
+    if (!listed.ok) {
+      errors.push({ code: unavailableCode, message: listed.message });
+      return null;
+    }
+    const payload = asRecord(asRecord(listed.data)[listKey]);
+    const listInfo = asRecord(payload.listInfo);
+    const pinned = pinItemsToAccountId(asArray(payload[itemsKey]), accountId);
+    if (pinned.dropped > 0) {
+      warnings.push({
+        code: "client_name_not_unique",
+        message:
+          "Some name-matched rows belonged to another client or lacked client.accountId and were omitted. SuperOps documents client.name as the ticket/asset client filter, not accountId.",
+      });
+    }
+    const truncated = listInfo.hasMore === true || pinned.dropped > 0;
+    sections[section] = truncated ? "truncated" : "ok";
+    return {
+      items: pinned.kept.map(omitStructuredEmail),
+      listInfo,
+      truncated,
+      droppedForeign: pinned.dropped,
+    };
+  }
+
   let sites: Record<string, unknown> | null = null;
   const siteList = await queryBoundedList(
     client,
     Q.GET_CLIENT_SITE_LIST,
-    { clientId: resolved.accountId, listInfo: listInfoInput({ page: paging.page, pageSize: paging.pageSize }) },
+    { clientId: accountId, listInfo: listInfoInput({ page: paging.page, pageSize: paging.pageSize }) },
     logicalOperations,
     "getClientSiteList"
   );
@@ -92,54 +126,47 @@ export async function investigateClient(
     errors.push({ code: "sites_unavailable", message: siteList.message });
   }
 
-  let assets: Record<string, unknown> | null = null;
-  const clientName = typeof resolved.detail.name === "string" ? resolved.detail.name : "";
-  const assetList = clientName
-    ? await queryBoundedList(
-        client,
-        Q.GET_ASSET_LIST,
-        listInfoInput({
-          page: paging.page,
-          pageSize: paging.pageSize,
-          condition: exactIs("client.name", clientName),
-          sort: [sortBy("lastCommunicatedTime", "DESC")],
-        }),
-        logicalOperations,
-        "getAssetList"
-      )
-    : { ok: false as const, code: "malformed_input", message: "Client name missing", upstreamFailureCategory: "malformed_input" };
-  if (assetList.ok) {
-    const payload = asRecord(asRecord(assetList.data).getAssetList);
-    const listInfo = asRecord(payload.listInfo);
-    sections.assets = listInfo.hasMore === true ? "truncated" : "ok";
-    assets = { items: asArray(payload.assets).map((item) => omitStructuredEmail(item)), listInfo, truncated: listInfo.hasMore === true };
-  } else {
-    errors.push({ code: "assets_unavailable", message: assetList.message });
-  }
+  const assets = attachPinnedPage(
+    clientName
+      ? await queryBoundedList(
+          client,
+          Q.GET_ASSET_LIST,
+          listInfoInput({
+            page: paging.page,
+            pageSize: paging.pageSize,
+            condition: exactIs("client.name", clientName),
+            sort: [sortBy("lastCommunicatedTime", "DESC")],
+          }),
+          logicalOperations,
+          "getAssetList"
+        )
+      : { ok: false as const, message: "Client name missing" },
+    "getAssetList",
+    "assets",
+    "assets",
+    "assets_unavailable"
+  );
 
-  let tickets: Record<string, unknown> | null = null;
-  const ticketList = clientName
-    ? await queryBoundedList(
-        client,
-        Q.GET_TICKET_LIST,
-        listInfoInput({
-          page: paging.page,
-          pageSize: paging.pageSize,
-          condition: exactIs("client.name", clientName),
-          sort: [sortBy("createdTime", "DESC")],
-        }),
-        logicalOperations,
-        "getTicketList"
-      )
-    : { ok: false as const, code: "malformed_input", message: "Client name missing", upstreamFailureCategory: "malformed_input" };
-  if (ticketList.ok) {
-    const payload = asRecord(asRecord(ticketList.data).getTicketList);
-    const listInfo = asRecord(payload.listInfo);
-    sections.tickets = listInfo.hasMore === true ? "truncated" : "ok";
-    tickets = { items: asArray(payload.tickets).map((item) => omitStructuredEmail(item)), listInfo, truncated: listInfo.hasMore === true };
-  } else {
-    errors.push({ code: "tickets_unavailable", message: ticketList.message });
-  }
+  const tickets = attachPinnedPage(
+    clientName
+      ? await queryBoundedList(
+          client,
+          Q.GET_TICKET_LIST,
+          listInfoInput({
+            page: paging.page,
+            pageSize: paging.pageSize,
+            condition: exactIs("client.name", clientName),
+            sort: [sortBy("createdTime", "DESC")],
+          }),
+          logicalOperations,
+          "getTicketList"
+        )
+      : { ok: false as const, message: "Client name missing" },
+    "getTicketList",
+    "tickets",
+    "tickets",
+    "tickets_unavailable"
+  );
 
   const supportingFailed = [sections.sites, sections.assets, sections.tickets].some((section) => section === "failed");
   return {
@@ -155,7 +182,7 @@ export async function investigateClient(
       supplied: { [identity.key]: identity.value },
       classifiedAs: identity.key,
       resolution: resolved.method,
-      accountId: resolved.accountId,
+      accountId,
       sections,
       truncated: {
         sites: sections.sites === "truncated",
@@ -164,6 +191,10 @@ export async function investigateClient(
       },
       logicalOperations,
       filterAttributes: clientName ? ["client.name"] : [],
+      clientScope: {
+        sites: "clientId",
+        assetsTickets: "client.name locally pinned to accountId",
+      },
     },
   };
 }

@@ -17,7 +17,7 @@ import {
 } from "../superops/conditions.js";
 import { listInfoInput, queryBoundedList } from "../superops/list-search.js";
 import { asArray, asRecord, omitStructuredEmail, type InvestigateStatus } from "../investigate/common.js";
-import { ASSET_ID_PATTERN } from "../assets/asset-ref.js";
+import { parseAssetId } from "../assets/asset-ref.js";
 import { ALERT_PAGE_SIZE } from "../investigate/bounds.js";
 
 const FILTER_KEYS = ["assetId", "status", "severity", "created", "createdInLastDays"];
@@ -104,10 +104,11 @@ export async function searchAlerts(args: Record<string, unknown>, client: SuperO
   const sort = [sortBy("createdTime", "DESC")];
 
   if (assetId) {
-    if (!ASSET_ID_PATTERN.test(assetId)) {
+    const parsed = parseAssetId(assetId);
+    if (!parsed.ok) {
       return searchFailed({
-        code: "malformed_input",
-        message: "assetId must be a SuperOps internal numeric ID",
+        code: parsed.code,
+        message: parsed.message,
         logicalOperations,
         query: "getAlertsForAsset",
       });
@@ -115,7 +116,7 @@ export async function searchAlerts(args: Record<string, unknown>, client: SuperO
     const listed = await queryBoundedList(
       client,
       Q.GET_ALERTS_FOR_ASSET,
-      { assetId, listInfo: listInfoInput({ page: paging.page, pageSize: paging.pageSize, condition, sort }) },
+      { assetId: parsed.value, listInfo: listInfoInput({ page: paging.page, pageSize: paging.pageSize, condition, sort }) },
       logicalOperations,
       "getAlertsForAsset"
     );
