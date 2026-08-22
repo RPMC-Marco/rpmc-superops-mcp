@@ -239,7 +239,7 @@ export const WRITE_CAPABILITIES: Capability[] = [
   ),
   writeTool(
     "superops_kb_articles_create",
-    "Create a KB article via official createKbArticle. Caller supplies HTML content (this is not article-body retrieval). Default status DRAFT and technician-only visibility. Requester visibility or PUBLISHED is customer-visible. Article body update/retrieval remains a planned future addon.",
+    "Create a KB article via official createKbArticle. Caller supplies HTML content (this is not article-body retrieval). Default status DRAFT, loginRequired=true, and technician-only visibility (AllUsers+AllGroups). Fragment HTML is wrapped in an html/body document because the RPMC tenant ISE's on loginRequired=false fragment HTML. Requester visibility or PUBLISHED is customer-visible. Article body update/retrieval remains a planned future addon.",
     "write_low",
     z.object({
       name: z.string().min(1),

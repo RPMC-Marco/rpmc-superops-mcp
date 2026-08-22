@@ -277,4 +277,39 @@ describe("Phase 2 write surface", () => {
     expect(JSON.stringify(result.audit)).not.toContain("password");
     expect(result.audit?.metadata?.targetType).toBe("ticket");
   });
+
+  it("creates a KB article with the live-confirmed HTML/loginRequired/technician share contract", async () => {
+    const config = loadConfig(stdioEnv);
+    let mutationInput: Record<string, unknown> | undefined;
+    const client = clientFor((query, variables) => {
+      if (query.includes("mutation createKbArticle")) {
+        mutationInput = variables?.input as Record<string, unknown>;
+        return { createKbArticle: { itemId: "kb1", name: "TEST article", status: "DRAFT" } };
+      }
+      if (query.includes("getKbItem")) {
+        return { getKbItem: { itemId: "kb1", name: "TEST article", status: "DRAFT" } };
+      }
+      throw new Error(query.slice(0, 80));
+    });
+    const result = await handleTool(
+      "superops_kb_articles_create",
+      {
+        name: "TEST article",
+        parentItemId: "col1",
+        content: "<p>TEST fragment</p>",
+        requestId: "req-kb-article-1",
+      },
+      client,
+      config
+    );
+    const payload = JSON.parse(result.content[0]?.text ?? "{}") as { outcome: string; mutation: string };
+    expect(result.isError).toBeFalsy();
+    expect(payload.mutation).toBe("createKbArticle");
+    expect(payload.outcome).toBe("complete");
+    expect(mutationInput?.content).toBe("<html><body><p>TEST fragment</p></body></html>");
+    expect(mutationInput?.loginRequired).toBe(true);
+    expect(mutationInput?.visibility).toEqual({
+      added: [{ portalType: "TECHNICIAN", userSharedType: "AllUsers", groupSharedType: "AllGroups" }],
+    });
+  });
 });

@@ -27,6 +27,7 @@ import {
   ticketPreWriteSummary,
   userPreWriteSummary,
 } from "./resolve.js";
+import { kbArticleHtml, kbLoginRequired, kbVisibility } from "./kb.js";
 import { classifyScriptConsequence, scriptParamDigest } from "./scripts.js";
 import type { WriteExecutionResult, WriteTarget, WriteVerification } from "./types.js";
 import type { WriteOperationPlan, WriteRuntime } from "./pipeline.js";
@@ -89,24 +90,6 @@ async function sanitizeItDocFields(
     out[columnName] = value;
   }
   return out;
-}
-
-function kbVisibility(kind: "technicians" | "requesters" | undefined): Record<string, unknown> {
-  if (kind === "requesters") {
-    return {
-      added: [
-        {
-          portalType: "REQUESTER",
-          clientSharedType: "AllClients",
-          siteSharedType: "AllSites",
-          userRoleSharedType: "AllRoles",
-        },
-      ],
-    };
-  }
-  return {
-    added: [{ portalType: "TECHNICIAN", userSharedType: "AllUsers" }],
-  };
 }
 
 async function runPlan(plan: WriteOperationPlan, runtime: WriteRuntime): Promise<WriteExecutionResult> {
@@ -959,9 +942,9 @@ export async function handleWriteTool(
       name: requireString(input, "name"),
       parent: { itemId: requireString(input, "parentItemId") },
       status,
-      content: requireString(input, "content"),
+      content: kbArticleHtml(requireString(input, "content")),
       visibility: kbVisibility(visibility),
-      loginRequired: input.loginRequired === true,
+      loginRequired: kbLoginRequired(input.loginRequired),
     };
     return runPlan(
       {
