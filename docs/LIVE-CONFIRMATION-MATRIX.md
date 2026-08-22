@@ -112,14 +112,28 @@ Safe failure for unfiltered contract errors is now `query_failed`, not `unsuppor
 
 **IT-doc privacy:** PARTIAL. Canonical product keys redacted; one non-canonical Key/Serial map representation leaked. Hardware serials must remain visible.
 
-## 0.1.10 targeted revalidation (do not mark LIVE-CONFIRMED from unit tests)
+## 0.1.10 targeted live result (QNAP 0.1.10 / `ba754ad`)
+
+`readonly=true`, `writesRegistered=false`, 60 read / 0 write. CI SUCCESS. No source changes, mutations, scripts, deployment changes, or KB body access during validation.
+
+**FAILED / query_failed:** getOfferedItems, getServiceItemList, getTaskList. Nesting OfferedItem/Task associations did **not** fix 0.1.9. Completing ServiceItem `salesTax.rates` did **not** fix the list.
+
+**NOT TESTABLE / NO DISCOVERABLE ID:** getServiceItem, getTask. Prerequisite lists still failed; no IDs were manufactured.
+
+**PRIVACY FAILURE:** IT-documentation. Canonical 5×5 product keys redacted; `valuePresent`/`redacted` metadata worked; product/asset names remained visible; Password-type customFields were null. One non-canonical category-defined Product Key / Key-Serial value still reached MCP output through both list and get. The runtime key was an opaque UDF (`udf6text`); the document name did not say "Product Key". The actual secret was omitted from the validation report.
+
+**LIVE-CONFIRMED:** ordinary hardware / asset `serialNumber` remained visible.
+
+## 0.1.11 targeted revalidation (do not mark LIVE-CONFIRMED from unit tests or development probes)
+
+0.1.11 is undeployed. Development-time QUERY-only contract probes established the accepted selections below. Formal live classification still requires the deployed candidate.
 
 | Query | Why revalidate | Success looks like |
 |---|---|---|
-| getOfferedItems | nest serviceItem/client/site/workItem/technician | page of offered items |
-| getServiceItemList | complete Tax nest on salesTax; keep `itemId` | page with canonical service `itemId` |
-| getServiceItem | only if list yields a real `itemId` | exact get; else remain NOT TESTABLE |
-| getTaskList | nest technician/techGroup/ticket/workItem | page with canonical `taskId` |
-| getTask | only if list yields a real `taskId` | exact get; else remain NOT TESTABLE |
-| IT-doc Product Key privacy | semantic Key/Serial map redaction | non-canonical license values absent; metadata present |
-| ordinary hardware serial | must stay visible | `Serial Number` preserved |
+| getOfferedItems | leaf JSON associations (nests are `SubSelectionNotAllowed`) | page of offered items with identity/billing/work JSON |
+| getServiceItemList | keep `itemId` + category nest; `salesTax` without `totalRate` | page with canonical service `itemId` |
+| getServiceItem | shared fragment omits `salesTax.totalRate`; use list `itemId` only | exact get; else remain NOT TESTABLE |
+| getTaskList | `GetTaskListInput`; leaf JSON associations; omit `module` enum | page with canonical `taskId` |
+| getTask | same shared fragment; use list `taskId` only | exact get; else remain NOT TESTABLE |
+| IT-doc list + get privacy | category custom-field semantics applied to opaque UDF keys | non-canonical Key/Serial values absent; metadata present |
+| ordinary hardware serial | must stay visible | asset `serialNumber` / hardware Serial Number preserved |

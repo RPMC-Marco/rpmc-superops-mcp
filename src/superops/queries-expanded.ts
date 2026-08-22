@@ -74,7 +74,7 @@ const SERVICE_ITEM_FIELDS = `
     amount
     salesTaxEnabled
     category { categoryId name }
-    salesTax { taxId name totalRate rates { rateId name rateValue } }`;
+    salesTax { taxId name rates { rateId name rateValue } }`;
 
 const TAX_FIELDS = `
     taxId
@@ -94,11 +94,10 @@ const TASK_FIELDS = `
     overdue
     actualStartDate
     actualEndDate
-    technician { userId name }
-    techGroup { groupId name }
-    module
-    ticket { ticketId displayId subject }
-    workItem { workId displayId module }`;
+    technician
+    techGroup
+    ticket
+    workItem`;
 
 const KB_ITEM_FIELDS = `
     itemId
@@ -372,11 +371,11 @@ query getOfferedItems($input: ListInfoInput) {
       type
       billDate
       status
-      serviceItem { itemId name quantityType }
-      client { accountId name }
-      site { id name }
-      workItem { workId displayId module }
-      technician { userId name }
+      serviceItem
+      client
+      site
+      workItem
+      technician
       afterHours
       unitPrice
       qty
@@ -756,12 +755,9 @@ export const OBJECT_TYPED_QUERY_DOCUMENTS = [
   GET_SERVICE_CATALOG_ITEM_LIST,
   GET_SERVICE_ITEM,
   GET_SERVICE_ITEM_LIST,
-  GET_OFFERED_ITEMS,
   GET_INVOICE,
   GET_KB_ITEM,
   GET_KB_ITEMS,
-  GET_TASK,
-  GET_TASK_LIST,
   GET_ALL_FIELDS,
   GET_FIELD,
   GET_FIELDS,

@@ -67,21 +67,27 @@ describe("graphql contracts", () => {
     expect(blob).toMatch(/visibility \{\s*mappingId/);
     expect(blob).toMatch(/taxes \{\s*id/);
     expect(blob).toMatch(/contract \{\s*contractId/);
-    expect(blob).toMatch(/serviceItem \{ itemId name quantityType \}/);
-    expect(blob).toMatch(/technician \{ userId name \}/);
-    expect(blob).toMatch(/techGroup \{ groupId name \}/);
-    expect(blob).toMatch(/ticket \{ ticketId displayId subject \}/);
-    expect(blob).toMatch(/workItem \{ workId displayId module \}/);
-    expect(blob).toMatch(/salesTax \{ taxId name totalRate rates \{ rateId name rateValue \} \}/);
+    expect(blob).toMatch(/salesTax \{ taxId name totalRate \}/);
     expect(blob).not.toMatch(/KB_ARTICLE_CONTENT/);
   });
 
-  it("does not select OfferedItem, ServiceItem, or Task object fields as leaves", () => {
-    expect(GET_OFFERED_ITEMS).not.toMatch(/^\s+(serviceItem|client|site|workItem|technician)\s*$/m);
-    expect(GET_SERVICE_ITEM_LIST).not.toMatch(/^\s+(category|salesTax|blockItemAdjustedItems)\s*$/m);
-    expect(GET_TASK_LIST).not.toMatch(/^\s+(technician|techGroup|ticket|workItem)\s*$/m);
+  it("uses the live-accepted OfferedItem, ServiceItem, and Task selections", () => {
+    expect(GET_OFFERED_ITEMS).toMatch(/^\s+serviceItem\s*$/m);
+    expect(GET_OFFERED_ITEMS).toMatch(/^\s+client\s*$/m);
+    expect(GET_OFFERED_ITEMS).toMatch(/^\s+technician\s*$/m);
+    expect(GET_OFFERED_ITEMS).not.toMatch(/serviceItem \{/);
     expect(GET_SERVICE_ITEM_LIST).toContain("itemId");
+    expect(GET_SERVICE_ITEM_LIST).toContain("category { categoryId name }");
+    expect(GET_SERVICE_ITEM_LIST).toMatch(/salesTax \{ taxId name rates \{ rateId name rateValue \} \}/);
+    expect(GET_SERVICE_ITEM_LIST).not.toMatch(/salesTax \{[^}]*totalRate/);
+    expect(GET_SERVICE_ITEM_LIST).not.toMatch(/^\s+(category|salesTax|blockItemAdjustedItems)\s*$/m);
     expect(GET_TASK_LIST).toContain("taskId");
+    expect(GET_TASK_LIST).toMatch(/^\s+technician\s*$/m);
+    expect(GET_TASK_LIST).toMatch(/^\s+techGroup\s*$/m);
+    expect(GET_TASK_LIST).toMatch(/^\s+ticket\s*$/m);
+    expect(GET_TASK_LIST).toMatch(/^\s+workItem\s*$/m);
+    expect(GET_TASK_LIST).not.toMatch(/\bmodule\b/);
+    expect(GET_TASK_LIST).toContain("GetTaskListInput");
   });
 
   it("covers all 44 approved expansion queries", () => {

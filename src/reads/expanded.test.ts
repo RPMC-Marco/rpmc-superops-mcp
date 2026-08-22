@@ -313,18 +313,77 @@ describe("expanded Phase 1 reads", () => {
     const result = await handleExpandedRead(
       "superops_itdocs_get",
       { itDocId: "217184133502664704" },
-      fakeClient(() => ({
-        getItDocumentation: {
-          itDocId: "217184133502664704",
-          name: "RMS MS Office Pro Plus 2024",
-          customFields: { udf3text: "Contoso Office Suite", udf6text: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE" },
-        },
-      }))
+      fakeClient((query) => {
+        if (query.includes("getItDocumentationCategories")) {
+          return {
+            getItDocumentationCategories: [
+              {
+                typeId: "1002",
+                name: "Product Key",
+                customFields: [
+                  { columnName: "udf3text", label: "Product Name", fieldType: "TEXT" },
+                  { columnName: "udf6text", label: "Key/Serial", fieldType: "TEXT" },
+                ],
+              },
+            ],
+          };
+        }
+        return {
+          getItDocumentation: {
+            itDocId: "217184133502664704",
+            name: "RMS MS Office Pro Plus 2024",
+            customFields: { udf3text: "Contoso Office Suite", udf6text: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE" },
+          },
+        };
+      })
     );
     const text = JSON.stringify(result);
     expect(text).toContain("Contoso Office Suite");
     expect(text).not.toContain("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE");
     expect(text).toContain("customFieldsRedaction");
+  });
+
+  it("redacts opaque category-defined Key/Serial values on both IT-doc list and get", async () => {
+    const categories = {
+      getItDocumentationCategories: [
+        {
+          typeId: "1002",
+          name: "Product Key",
+          customFields: [
+            { columnName: "udf3text", label: "Product Name", fieldType: "TEXT" },
+            { columnName: "udf6text", label: "Key/Serial", fieldType: "TEXT" },
+          ],
+        },
+      ],
+    };
+    const document = {
+      itDocId: "217184133502664704",
+      name: "Finance workstation license",
+      customFields: { udf3text: "Contoso Office Suite", udf6text: "office-pack-temp-key-9182" },
+    };
+    const listed = await handleExpandedRead(
+      "superops_itdocs_list",
+      { typeId: "1002", page: 1, pageSize: 10 },
+      fakeClient((query) => {
+        if (query.includes("getItDocumentationCategories")) return categories;
+        return { getItDocumentationList: { documents: [document], listInfo: { page: 1, pageSize: 10, hasMore: false } } };
+      })
+    );
+    const got = await handleExpandedRead(
+      "superops_itdocs_get",
+      { itDocId: "217184133502664704" },
+      fakeClient((query) => {
+        if (query.includes("getItDocumentationCategories")) return categories;
+        return { getItDocumentation: document };
+      })
+    );
+    for (const result of [listed, got]) {
+      const text = JSON.stringify(result);
+      expect(text).toContain("Contoso Office Suite");
+      expect(text).not.toContain("office-pack-temp-key-9182");
+      expect(text).toContain("customFieldsRedaction");
+    }
+    expect((listed?.provenance as { logicalOperations: string[] }).logicalOperations).toContain("getItDocumentationCategories");
   });
 
   it("preserves large JSON IDs on expanded gets", async () => {

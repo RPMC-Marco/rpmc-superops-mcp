@@ -4,6 +4,26 @@ import { applyItDocSecretPolicy, redactSecretCustomFields } from "./custom-field
 const SYNTHETIC_CANONICAL = "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE";
 const SYNTHETIC_NONCANONICAL = "office-pack-temp-key-9182";
 
+const PRODUCT_KEY_CATEGORY = {
+  typeId: "1002",
+  name: "Product Key",
+  customFields: [
+    { columnName: "udf3text", label: "Product Name", fieldType: "TEXT" },
+    { columnName: "udf4text", label: "Asset name", fieldType: "TEXT" },
+    { columnName: "udf5para", label: "Notes", fieldType: "PARAGRAPH" },
+    { columnName: "udf6text", label: "Key/Serial", fieldType: "TEXT" },
+  ],
+};
+
+const HARDWARE_NOTE_CATEGORY = {
+  typeId: "1003",
+  name: "Device notes",
+  customFields: [
+    { columnName: "udf6text", label: "Location code", fieldType: "TEXT" },
+    { columnName: "udf8", label: "Serial Number", fieldType: "TEXT" },
+  ],
+};
+
 describe("IT documentation secret-field policy", () => {
   it("redacts a canonical Product Key field and keeps the product name", () => {
     const result = redactSecretCustomFields({
@@ -13,6 +33,44 @@ describe("IT documentation secret-field policy", () => {
     expect(result.customFields).toEqual({ udf3text: "Contoso Office Suite", udf6text: null });
     expect(JSON.stringify(result)).not.toContain(SYNTHETIC_CANONICAL);
     expect(result.redactions[0]?.reason).toBe("license_key_value");
+  });
+
+  it("redacts opaque udf6text when category metadata labels it Product Key", () => {
+    const result = applyItDocSecretPolicy(
+      {
+        name: "Finance workstation license",
+        customFields: { udf3text: "Contoso Office Suite", udf6text: SYNTHETIC_NONCANONICAL },
+      },
+      { categories: [PRODUCT_KEY_CATEGORY], typeId: "1002" }
+    );
+    const rec = result as { customFields: Record<string, unknown> };
+    expect(rec.customFields.udf3text).toBe("Contoso Office Suite");
+    expect(rec.customFields.udf6text).toBeNull();
+    expect(JSON.stringify(result)).not.toContain(SYNTHETIC_NONCANONICAL);
+  });
+
+  it("redacts opaque udf6text mapped to Key/Serial in a software-license category", () => {
+    const result = redactSecretCustomFields(
+      { udf6text: SYNTHETIC_NONCANONICAL, udf3text: "Contoso Office" },
+      { categories: [PRODUCT_KEY_CATEGORY], typeId: "1002" }
+    );
+    expect(result.customFields).toEqual({ udf6text: null, udf3text: "Contoso Office" });
+    expect(result.redactions[0]?.reason).toBe("secret_field_label");
+    expect(JSON.stringify(result)).not.toContain(SYNTHETIC_NONCANONICAL);
+  });
+
+  it("redacts a non-canonical arbitrary-looking license value because the field definition is sensitive", () => {
+    const result = applyItDocSecretPolicy(
+      {
+        name: "RMS Office packet",
+        customFields: { udf6text: "not-a-canonical-key", udf4text: "LAPTOP-12" },
+      },
+      { categories: [PRODUCT_KEY_CATEGORY] }
+    );
+    const rec = result as { customFields: Record<string, unknown> };
+    expect(rec.customFields.udf6text).toBeNull();
+    expect(rec.customFields.udf4text).toBe("LAPTOP-12");
+    expect(JSON.stringify(result)).not.toContain("not-a-canonical-key");
   });
 
   it("redacts a non-canonical Product Key value when the document is a license record", () => {
@@ -72,6 +130,41 @@ describe("IT documentation secret-field policy", () => {
     const rec = result as { customFields: Record<string, unknown> };
     expect(rec.customFields["Serial Number"]).toBe("PN-778812");
     expect(rec.customFields.Notes).toBe("Installed in reception");
+  });
+
+  it("preserves normal asset serialNumber", () => {
+    const result = applyItDocSecretPolicy({
+      assetId: "9001114136934215681",
+      name: "FS01",
+      serialNumber: "SRV-SERIAL-7788",
+    });
+    const rec = result as { serialNumber: string };
+    expect(rec.serialNumber).toBe("SRV-SERIAL-7788");
+  });
+
+  it("keeps an ordinary UDF with the same storage key when its category definition is not secret", () => {
+    const result = applyItDocSecretPolicy(
+      {
+        name: "Front desk printer",
+        customFields: { udf6text: "ROW-B-04", udf8: "PN-778812" },
+      },
+      { categories: [HARDWARE_NOTE_CATEGORY], typeId: "1003" }
+    );
+    const rec = result as { customFields: Record<string, unknown> };
+    expect(rec.customFields.udf6text).toBe("ROW-B-04");
+    expect(rec.customFields.udf8).toBe("PN-778812");
+  });
+
+  it("does not globally redact udf6text when category definitions conflict and no typeId is supplied", () => {
+    const result = applyItDocSecretPolicy(
+      {
+        name: "Ambiguous record",
+        customFields: { udf6text: "ROW-B-04" },
+      },
+      { categories: [PRODUCT_KEY_CATEGORY, HARDWARE_NOTE_CATEGORY] }
+    );
+    const rec = result as { customFields: Record<string, unknown> };
+    expect(rec.customFields.udf6text).toBe("ROW-B-04");
   });
 
   it("preserves ordinary technical notes and configuration", () => {

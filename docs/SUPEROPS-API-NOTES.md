@@ -65,9 +65,16 @@ Full read-surface live validation against QNAP 0.1.6: **PASS WITH CORRECTIONS**.
 - **Unsupported:** `getAssetList` `lastCommunicatedTime` sort; `getUnMonitoredAssetList`
 - JSON-scalar `site.client.accountId` arrived as an unquoted JSON number and lost precision under `JSON.parse` (corrected in 0.1.7 at the parse boundary)
 
-0.1.9 is live on QNAP (commit `d9df6b7341f2c4abad68c02123f2308956905c2f`). 0.1.10 is the undeployed remaining-selection / privacy-correction candidate.
+0.1.10 is live on QNAP (commit `ba754ad26539a298f19a18e255bdd04317fb3de8`). 0.1.11 is the undeployed remaining-selection / privacy-correction candidate.
 
-Official Task/OfferedItem association fields are documented as GraphQL `JSON` scalars. Live RPMC 0.1.9 rejected leaf selections on those fields (`technician`, `ticket`, `workItem`, and OfferedItem `serviceItem`/`client`/`site`/`workItem`/`technician`). 0.1.10 nests the documented identity children. Record this official-docs vs live-behavior conflict; do not revert to leaves without new live evidence.
+Official Task/OfferedItem association fields are documented as GraphQL `JSON` scalars. 0.1.9/0.1.10 assumed live required nested selections because MCP-safe errors were only `query_failed`. Development-time QUERY-only probes against the RPMC tenant (page 1 / pageSize 1, no mutations) established:
+
+- OfferedItem `serviceItem` / `client` / `site` / `workItem` / `technician` are live JSON leaves. Nesting them returns `SubSelectionNotAllowed` (0.1.10 root cause).
+- Task `technician` / `techGroup` / `ticket` / `workItem` are live JSON leaves. Nesting them returns `SubSelectionNotAllowed` (0.1.10 root cause). `getTaskList` live input is official `GetTaskListInput` (`ListInfoInput` is `VariableTypeMismatch`). Task `module` is a live `TaskModule` enum that cannot serialize `PROJECT`; omit it. Official docs already say `workItem.module` replaces `module`.
+- ServiceItem `category` is a live `ServiceCategory` object (`categoryId`/`name`). ServiceItem `salesTax` is a live `Tax` object. `salesTax.totalRate` on ServiceItem causes SuperOps `Internal Server Error` (0.1.8–0.1.10 root cause). `taxId`, `name`, and `rates { rateId name rateValue }` are accepted. Catalog/tax `totalRate` remains live-confirmed on those other types — do not change them.
+- `ItDocumentation` has no `type` / `typeId` field (official and live). Category `customFields` definitions (`columnName`/`label`/`fieldType`) are the semantic source for document UDF maps.
+
+Do not mark 0.1.11 LIVE-CONFIRMED from these development probes.
 
 ### `investigate_ticket` (RPMC LIVE-CONFIRMED, 2026-08-20 / 0.1.3)
 
@@ -172,4 +179,4 @@ Audit metadata is a whitelist (resolution method, section state, truncation, log
 
 ### 0.1.8 Phase 1 read expansion
 
-44 additional official reads are implemented as explicit domain MCP tools. Full accounting: `docs/OFFICIAL-READ-INVENTORY.md`. 0.1.9 live-confirmed additional list/get chains (client stage, contracts, catalog, tax, invoice get, KB get). 0.1.10 corrects remaining OfferedItem/ServiceItem/Task selections and IT-doc Key/Serial map redaction. IT documentation GraphQL type has no body field. KB article HTML is a separate SuperOps download API (planned future addon, not fetched). Human-authorized secret disclosure is a planned security capability. Worklogs require official `module` (TICKET|PROJECT). Scripts are list-only. Writes remain unregistered.
+44 additional official reads are implemented as explicit domain MCP tools. Full accounting: `docs/OFFICIAL-READ-INVENTORY.md`. 0.1.9 live-confirmed additional list/get chains (client stage, contracts, catalog, tax, invoice get, KB get). 0.1.10 live still failed OfferedItem/ServiceItem/Task lists and leaked one category-defined IT-doc UDF. 0.1.11 corrects those remaining selections and applies category metadata to IT-doc UDF values. IT documentation GraphQL type has no body field. KB article HTML is a separate SuperOps download API (planned future addon, not fetched). Human-authorized secret disclosure is a planned security capability. Worklogs require official `module` (TICKET|PROJECT). Scripts are list-only. Writes remain unregistered.

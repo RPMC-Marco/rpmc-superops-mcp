@@ -2,7 +2,7 @@
 
 Official source: [SuperOps MSP GraphQL API](https://developer.superops.com/msp) and Help Center [Search, pagination, and sorting](https://support.superops.com/en/articles/6632220-search-pagination-and-sorting) (retrieved 2026-08-21). Community code is reference only.
 
-Live tenant evidence: **0.1.6** / **0.1.7** / **0.1.8** / **0.1.9** QNAP. Undeployed remaining-selection corrections: **0.1.10**. See `docs/LIVE-CONFIRMATION-MATRIX.md` and `docs/OFFICIAL-READ-INVENTORY.md`. Phase 1 is not complete.
+Live tenant evidence: **0.1.6** / **0.1.7** / **0.1.8** / **0.1.9** / **0.1.10** QNAP. Undeployed remaining-selection / privacy corrections: **0.1.11**. See `docs/LIVE-CONFIRMATION-MATRIX.md` and `docs/OFFICIAL-READ-INVENTORY.md`. Phase 1 is not complete.
 
 ## A. Implemented and RPMC live-confirmed
 
@@ -40,7 +40,7 @@ Live tenant evidence: **0.1.6** / **0.1.7** / **0.1.8** / **0.1.9** QNAP. Undepl
 
 See `docs/OFFICIAL-READ-INVENTORY.md`. Every official SuperOps `get*` query is IMPLEMENTED, EXCLUDED (with reason), or DEFERRED / SPECIAL-PURPOSE. There is no silent low-value bucket.
 
-The 44 newly approved reads were live-accounted in 0.1.8 and further confirmed in 0.1.9. 0.1.10 corrects remaining OfferedItem/ServiceItem/Task object selections and IT-doc Key/Serial map redaction. KB article body download remains a planned future addon. Human-authorized secret disclosure is a planned security capability, not implemented. Deprecated Field replacements are not used. `getUnMonitoredAssetList` is never invoked.
+The 44 newly approved reads were live-accounted in 0.1.8 and further confirmed in 0.1.9. 0.1.10 live still failed getOfferedItems, getServiceItemList, and getTaskList, and leaked one category-defined IT-doc Key/Serial UDF. 0.1.11 corrects those remaining contracts and applies category metadata to IT-doc UDF values. KB article body download remains a planned future addon. Human-authorized secret disclosure is a planned security capability, not implemented. Deprecated Field replacements are not used. `getUnMonitoredAssetList` is never invoked.
 
 ## E. Unsuitable / intentionally not implemented
 

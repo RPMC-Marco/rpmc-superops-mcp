@@ -4,6 +4,10 @@
  * Default: redact sensitive values. Preserve ordinary technical values,
  * including hardware/asset serial numbers.
  *
+ * Opaque SuperOps UDF keys (udf6text) are interpreted through IT-document
+ * category custom-field definitions (columnName / label / fieldType), not by
+ * column name alone.
+ *
  * Phase 1 has no AI-togglable bypass. A future human-authorized, per-field
  * disclosure path may be added later (PLANNED SECURITY CAPABILITY). Do not
  * add includeSecrets=true or any model-controlled override here.
@@ -26,9 +30,24 @@ export interface CustomFieldRedaction {
   reason: "secret_field_type" | "secret_field_label" | "license_key_value";
 }
 
+export interface CategoryFieldDef {
+  columnName: string;
+  label?: string;
+  fieldType?: string;
+}
+
+export interface ItDocCategory {
+  typeId?: string;
+  name?: string;
+  customFields?: unknown;
+}
+
 export interface ItDocSecretContext {
   documentName?: string;
   categoryName?: string;
+  typeId?: string;
+  categories?: ItDocCategory[];
+  fieldDefs?: CategoryFieldDef[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -69,6 +88,106 @@ function scalarLooksLikeProductKey(value: unknown): boolean {
   return typeof value === "string" && PRODUCT_KEY.test(value);
 }
 
+function scalarId(value: unknown): string {
+  return value == null ? "" : String(value);
+}
+
+export function parseCategoryFieldDefs(customFields: unknown): CategoryFieldDef[] {
+  if (typeof customFields === "string") {
+    try {
+      return parseCategoryFieldDefs(JSON.parse(customFields));
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(customFields)) return [];
+  const defs: CategoryFieldDef[] = [];
+  for (const item of customFields) {
+    if (!isRecord(item)) continue;
+    const columnName =
+      typeof item.columnName === "string"
+        ? item.columnName
+        : typeof item.name === "string"
+          ? item.name
+          : "";
+    if (!columnName) continue;
+    defs.push({
+      columnName,
+      label: typeof item.label === "string" ? item.label : undefined,
+      fieldType: typeof item.fieldType === "string" ? item.fieldType : undefined,
+    });
+  }
+  return defs;
+}
+
+function defsEquivalent(left: CategoryFieldDef, right: CategoryFieldDef): boolean {
+  return (
+    normalizeLabel(left.label ?? "") === normalizeLabel(right.label ?? "") &&
+    (left.fieldType ?? "").toUpperCase() === (right.fieldType ?? "").toUpperCase()
+  );
+}
+
+export function uniqueCategoryFieldDefs(categories: ItDocCategory[]): CategoryFieldDef[] {
+  const byColumn = new Map<string, CategoryFieldDef[]>();
+  for (const category of categories) {
+    for (const def of parseCategoryFieldDefs(category.customFields)) {
+      const list = byColumn.get(def.columnName) ?? [];
+      list.push(def);
+      byColumn.set(def.columnName, list);
+    }
+  }
+  const unique: CategoryFieldDef[] = [];
+  for (const [columnName, defs] of byColumn) {
+    if (defs.every((def) => defsEquivalent(def, defs[0]))) {
+      unique.push({ columnName, label: defs[0].label, fieldType: defs[0].fieldType });
+    }
+  }
+  return unique;
+}
+
+export function resolveItDocFieldCatalog(
+  customFields: unknown,
+  context: ItDocSecretContext = {}
+): { fieldDefs: CategoryFieldDef[]; categoryName?: string } {
+  if (context.fieldDefs?.length) {
+    return { fieldDefs: context.fieldDefs, categoryName: context.categoryName };
+  }
+  const categories = context.categories ?? [];
+  if (context.typeId) {
+    const match = categories.find((category) => scalarId(category.typeId) === scalarId(context.typeId));
+    if (match) {
+      return {
+        fieldDefs: parseCategoryFieldDefs(match.customFields),
+        categoryName: typeof match.name === "string" ? match.name : context.categoryName,
+      };
+    }
+  }
+
+  const keys = isRecord(customFields) ? Object.keys(customFields) : [];
+  let best: ItDocCategory | undefined;
+  let bestScore = 0;
+  let ties = 0;
+  for (const category of categories) {
+    const defined = new Set(parseCategoryFieldDefs(category.customFields).map((def) => def.columnName));
+    if (!defined.size) continue;
+    const overlap = keys.filter((key) => defined.has(key)).length;
+    if (overlap > bestScore) {
+      best = category;
+      bestScore = overlap;
+      ties = 1;
+    } else if (overlap === bestScore && overlap > 0) {
+      ties += 1;
+    }
+  }
+  if (best && bestScore > 0 && ties === 1) {
+    return {
+      fieldDefs: parseCategoryFieldDefs(best.customFields),
+      categoryName: typeof best.name === "string" ? best.name : context.categoryName,
+    };
+  }
+  return { fieldDefs: uniqueCategoryFieldDefs(categories), categoryName: context.categoryName };
+}
+
 function redactScalar(
   raw: unknown,
   meta: { columnName?: string; label?: string; fieldType?: string },
@@ -97,25 +216,36 @@ function redactScalar(
   return { value: raw };
 }
 
-function mapImpliesLicense(record: Record<string, unknown>): boolean {
-  return Object.keys(record).some((key) => isLicenseKeyLabel(key) || LICENSE_CONTEXT.test(key));
+function mapImpliesLicense(record: Record<string, unknown>, fieldDefs: CategoryFieldDef[]): boolean {
+  if (Object.keys(record).some((key) => isLicenseKeyLabel(key) || LICENSE_CONTEXT.test(key))) return true;
+  return fieldDefs.some((def) => isLicenseKeyLabel(def.label ?? "") || isLicenseContextText(def.label));
+}
+
+function defForColumn(fieldDefs: CategoryFieldDef[], columnName: string): CategoryFieldDef | undefined {
+  return fieldDefs.find((def) => def.columnName === columnName);
 }
 
 function redactRecordMap(
   record: Record<string, unknown>,
-  licenseContext: boolean
+  licenseContext: boolean,
+  fieldDefs: CategoryFieldDef[]
 ): { customFields: Record<string, unknown>; redactions: CustomFieldRedaction[] } {
-  const license = licenseContext || mapImpliesLicense(record);
+  const license = licenseContext || mapImpliesLicense(record, fieldDefs);
   const out: Record<string, unknown> = {};
   const redactions: CustomFieldRedaction[] = [];
   for (const [columnName, raw] of Object.entries(record)) {
     if (Array.isArray(raw) || isRecord(raw)) {
-      const nested = redactSecretCustomFields(raw, { licenseContext: license });
+      const nested = redactSecretCustomFields(raw, { licenseContext: license, fieldDefs });
       out[columnName] = nested.customFields;
       redactions.push(...nested.redactions);
       continue;
     }
-    const next = redactScalar(raw, { columnName, label: columnName }, license);
+    const def = defForColumn(fieldDefs, columnName);
+    const next = redactScalar(
+      raw,
+      { columnName, label: def?.label ?? columnName, fieldType: def?.fieldType },
+      license
+    );
     out[columnName] = next.value;
     if (next.notice) redactions.push(next.notice);
   }
@@ -124,13 +254,15 @@ function redactRecordMap(
 
 function redactArrayItem(
   item: unknown,
-  licenseContext: boolean
+  licenseContext: boolean,
+  fieldDefs: CategoryFieldDef[]
 ): { item: unknown; notices: CustomFieldRedaction[] } {
   if (!isRecord(item)) return { item, notices: [] };
-  const fieldType = typeof item.fieldType === "string" ? item.fieldType.toUpperCase() : "";
-  const label = typeof item.label === "string" ? item.label : undefined;
   const columnName =
     typeof item.columnName === "string" ? item.columnName : typeof item.name === "string" ? item.name : undefined;
+  const def = columnName ? defForColumn(fieldDefs, columnName) : undefined;
+  const fieldType = typeof item.fieldType === "string" ? item.fieldType.toUpperCase() : def?.fieldType?.toUpperCase() ?? "";
+  const label = typeof item.label === "string" ? item.label : def?.label;
   const raw = "value" in item ? item.value : "fieldValue" in item ? item.fieldValue : undefined;
   const hasValueKey = "value" in item || "fieldValue" in item;
   if (hasValueKey && !isRecord(raw) && !Array.isArray(raw)) {
@@ -142,7 +274,7 @@ function redactArrayItem(
       notices: [next.notice],
     };
   }
-  const nested = redactSecretCustomFields(item, { licenseContext });
+  const nested = redactSecretCustomFields(item, { licenseContext, fieldDefs });
   return { item: nested.customFields, notices: nested.redactions };
 }
 
@@ -153,19 +285,21 @@ export function redactSecretCustomFields(
   customFields: unknown;
   redactions: CustomFieldRedaction[];
 } {
+  const resolved = resolveItDocFieldCatalog(customFields, context);
   const licenseContext =
-    Boolean(context.licenseContext) || isLicenseContextText(context.documentName, context.categoryName);
+    Boolean(context.licenseContext) ||
+    isLicenseContextText(context.documentName, context.categoryName, resolved.categoryName);
   if (Array.isArray(customFields)) {
     const redactions: CustomFieldRedaction[] = [];
     const items = customFields.map((item) => {
-      const next = redactArrayItem(item, licenseContext);
+      const next = redactArrayItem(item, licenseContext, resolved.fieldDefs);
       redactions.push(...next.notices);
       return next.item;
     });
     return { customFields: items, redactions };
   }
   if (!isRecord(customFields)) return { customFields, redactions: [] };
-  return redactRecordMap(customFields, licenseContext);
+  return redactRecordMap(customFields, licenseContext, resolved.fieldDefs);
 }
 
 export function applyItDocSecretPolicy(value: unknown, context: ItDocSecretContext = {}): unknown {
@@ -178,13 +312,20 @@ export function applyItDocSecretPolicy(value: unknown, context: ItDocSecretConte
       : isRecord(value.category) && typeof value.category.name === "string"
         ? value.category.name
         : context.categoryName;
-  const nextContext = { documentName, categoryName };
+  const nextContext: ItDocSecretContext = {
+    ...context,
+    documentName,
+    categoryName,
+  };
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value)) {
     if (key === "customFields") {
-      const redacted = redactSecretCustomFields(child, nextContext);
+      const resolved = resolveItDocFieldCatalog(child, nextContext);
+      const redacted = redactSecretCustomFields(child, { ...nextContext, ...resolved });
       out.customFields = redacted.customFields;
       if (redacted.redactions.length) out.customFieldsRedaction = redacted.redactions;
+    } else if (key === "customFieldsRedaction") {
+      out[key] = child;
     } else {
       out[key] = applyItDocSecretPolicy(child, nextContext);
     }

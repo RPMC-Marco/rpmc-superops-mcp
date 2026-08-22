@@ -3,7 +3,8 @@ import * as E from "../superops/queries-expanded.js";
 import { parseAssetId } from "../assets/asset-ref.js";
 import { stringArg, stringList } from "../superops/conditions.js";
 import { listInfoInput } from "../superops/list-search.js";
-import { failureCode, upstreamFailureCategory } from "../investigate/common.js";
+import { failureCode, omitStructuredEmail, upstreamFailureCategory } from "../investigate/common.js";
+import { applyItDocSecretPolicy, type ItDocCategory } from "../privacy/custom-fields.js";
 import { toClientSafeError } from "../privacy/errors.js";
 import {
   asArray,
@@ -19,6 +20,7 @@ import {
   runBareList,
   runGet,
   runPagedList,
+  sanitizeTextFields,
   USER_LOG_LIMIT,
 } from "./runtime.js";
 
@@ -48,6 +50,18 @@ function fieldIdentifier(args: Record<string, unknown>): { ok: true; value: Reco
 
 function boundArray(items: unknown[], limit: number): { items: unknown[]; truncated: boolean } {
   return { items: items.slice(0, limit).map((item) => privacy(item)), truncated: items.length > limit };
+}
+
+function itDocPrivacy(value: unknown, categories: unknown[], typeId?: string): unknown {
+  return applyItDocSecretPolicy(sanitizeTextFields(omitStructuredEmail(value)), {
+    categories: categories as ItDocCategory[],
+    typeId,
+  });
+}
+
+async function loadItDocCategories(client: SuperOpsClient): Promise<unknown[]> {
+  const data = asRecord(await client.query(E.GET_IT_DOCUMENTATION_CATEGORIES));
+  return asArray(data.getItDocumentationCategories);
 }
 
 export async function handleExpandedRead(
@@ -299,7 +313,26 @@ export async function handleExpandedRead(
     case "superops_itdocs_get": {
       const itDocId = requiredId(args, "itDocId");
       if (!itDocId) return failed({ code: "malformed_input", message: "itDocId is required", query: "getItDocumentation" });
-      return runGet(client, E.GET_IT_DOCUMENTATION, "getItDocumentation", { input: { itDocId } }, (data) => data.getItDocumentation);
+      const operations = ["getItDocumentation", "getItDocumentationCategories"];
+      try {
+        const [docData, categories] = await Promise.all([
+          client.query(E.GET_IT_DOCUMENTATION, { input: { itDocId } }),
+          loadItDocCategories(client),
+        ]);
+        const item = asRecord(docData).getItDocumentation;
+        if (item == null || (typeof item === "object" && !Array.isArray(item) && Object.keys(asRecord(item)).length === 0)) {
+          return failed({ code: "not_found", message: "getItDocumentation returned no record", query: "getItDocumentation", logicalOperations: operations });
+        }
+        return complete({ item: itDocPrivacy(item, categories) }, "getItDocumentation", operations, { resolution: "id_direct" });
+      } catch (error) {
+        return failed({
+          code: failureCode(error),
+          message: toClientSafeError(error),
+          query: "getItDocumentation",
+          logicalOperations: operations,
+          upstreamFailureCategory: upstreamFailureCategory(error),
+        });
+      }
     }
     case "superops_itdocs_list": {
       const typeId = requiredId(args, "typeId");
@@ -311,14 +344,34 @@ export async function handleExpandedRead(
         });
       }
       const { page, pageSize } = paging(args);
-      return runPagedList(
-        client,
-        E.GET_IT_DOCUMENTATION_LIST,
-        "getItDocumentationList",
-        { typeId, listInfo: listInfoInput({ page, pageSize }) },
-        (payload) => asArray(payload.documents),
-        "getItDocumentationList"
-      );
+      const operations = ["getItDocumentationList", "getItDocumentationCategories"];
+      try {
+        const [listed, categories] = await Promise.all([
+          client.query(E.GET_IT_DOCUMENTATION_LIST, { input: { typeId, listInfo: listInfoInput({ page, pageSize }) } }),
+          loadItDocCategories(client),
+        ]);
+        const payload = asRecord(asRecord(listed).getItDocumentationList);
+        const listInfo = asRecord(payload.listInfo);
+        const items = asArray(payload.documents).map((item) => itDocPrivacy(item, categories, typeId));
+        return complete(
+          {
+            items,
+            listInfo,
+            returned: items.length,
+            truncated: listInfo.hasMore === true,
+          },
+          "getItDocumentationList",
+          operations
+        );
+      } catch (error) {
+        return failed({
+          code: failureCode(error),
+          message: toClientSafeError(error),
+          query: "getItDocumentationList",
+          logicalOperations: operations,
+          upstreamFailureCategory: upstreamFailureCategory(error),
+        });
+      }
     }
     case "superops_itdocs_categories":
       return runBareList(client, E.GET_IT_DOCUMENTATION_CATEGORIES, "getItDocumentationCategories", undefined, (data) =>
