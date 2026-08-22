@@ -346,29 +346,29 @@ export async function handleWriteTool(
     const classification: ToolClassification = privacyType === "PUBLIC" ? "write_visible" : "write_low";
     const content = requireString(input, "content");
     const mutationInput = {
-      workItem: { workId: target.id, module: "TICKET" },
+      ticket: { ticketId: target.id },
       content,
       privacyType,
     };
     return runPlan(
       {
         toolName: name,
-        mutationName: "createNote",
+        mutationName: "createTicketNote",
         classification,
-        action: "createNote",
+        action: "createTicketNote",
         target,
         canonicalPayload: mutationInput,
         requestId: reqId,
         logicalOperations: ops,
         preWrite: { captured: true, summary: { ticketId: target.id } },
         mutate: async () => {
-          ops.push("createNote");
-          return asRecord(await rt.client.mutate(M.CREATE_NOTE, { input: mutationInput }));
+          ops.push("createTicketNote");
+          return asRecord(await rt.client.mutate(M.CREATE_TICKET_NOTE, { input: mutationInput }));
         },
         verify: async (mutationResult) => {
-          const created = asRecord(mutationResult.createNote);
+          const created = asRecord(mutationResult.createTicketNote);
           if (!scalarId(created.noteId)) {
-            return { result: "partial", compared: {}, notes: "createNote did not return noteId" };
+            return { result: "partial", compared: {}, notes: "createTicketNote did not return noteId" };
           }
           ops.push("getTicketNoteList");
           const listed = asRecord(await client.query(Q.GET_TICKET_NOTE_LIST, { input: { ticketId: target.id } }));

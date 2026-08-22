@@ -26,7 +26,7 @@ function writeTool(
 export const WRITE_CAPABILITIES: Capability[] = [
   writeTool(
     "superops_tickets_create",
-    "Create a SuperOps ticket. Identify the client with exactly one of accountId or clientName (exact unique match). Optional assetId/hostName associates the asset at create time via official addAssets. Optional alertId sets sourceReferenceId. Uses API token technician identity. Customer-visible. Does not merge tickets. Status Closed requires lifecycle=close and an explicit human close instruction; generic ticket handling may use Resolved.",
+    "Create a SuperOps ticket. Identify the client with exactly one of accountId or clientName (exact unique match). Optional assetId/hostName associates the asset at create time via official addAssets. Optional alertId sets sourceReferenceId. Uses API token technician identity. Customer-visible. Does not merge tickets. Status Closed requires lifecycle=close and an explicit human close instruction; generic ticket handling may use Resolved. Live RPMC rejects technician assignment at create (dependent_validation_failed); assign technician via superops_tickets_update after create.",
     "write_visible",
     z.object({
       subject: z.string().min(1),
@@ -76,7 +76,7 @@ export const WRITE_CAPABILITIES: Capability[] = [
   ),
   writeTool(
     "superops_tickets_add_note",
-    "Add a ticket note via official createNote. privacyType PRIVATE is an internal technician note; PUBLIC is requester-visible. Technician identity is the API token. Does not impersonate another technician.",
+    "Add a ticket note via official createTicketNote (live RPMC still uses this deprecated mutation; createNote is not present on the tenant). privacyType PRIVATE is an internal technician note; PUBLIC is requester-visible. Technician identity is the API token. Does not impersonate another technician.",
     "write_low",
     z.object({
       ticket: z.string().min(1),

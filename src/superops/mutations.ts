@@ -72,21 +72,6 @@ const ITDOC_FIELDS = `
     site
     customFields`;
 
-const KB_ITEM_FIELDS = `
-    itemId
-    name
-    itemType
-    description
-    status
-    createdBy
-    createdOn
-    lastModifiedBy
-    lastModifiedOn
-    viewCount
-    articleType
-    loginRequired
-    parent { itemId name }`;
-
 export const CREATE_TICKET = `
 mutation createTicket($input: CreateTicketInput!) {
   createTicket(input: $input) {
@@ -103,9 +88,9 @@ mutation updateTicket($input: UpdateTicketInput!) {
 }
 `;
 
-export const CREATE_NOTE = `
-mutation createNote($input: CreateNoteInput!) {
-  createNote(input: $input) {
+export const CREATE_TICKET_NOTE = `
+mutation createTicketNote($input: CreateTicketNoteInput!) {
+  createTicketNote(input: $input) {
     ${NOTE_FIELDS}
   }
 }
@@ -170,10 +155,6 @@ mutation updateClientUser($input: UpdateClientUserInput!) {
     lastName
     name
     contactNumber
-    reportingManager
-    site
-    role
-    client
   }
 }
 `;
@@ -229,7 +210,12 @@ mutation updateItDocumentation($input: UpdateItDocumentationInput!) {
 export const CREATE_KB_ARTICLE = `
 mutation createKbArticle($input: CreateKbArticleInput!) {
   createKbArticle(input: $input) {
-    ${KB_ITEM_FIELDS}
+    itemId
+    name
+    status
+    articleType
+    loginRequired
+    parent { itemId name }
   }
 }
 `;
@@ -258,10 +244,9 @@ export const RUN_SCRIPT_ON_ASSET = `
 mutation runScriptOnAsset($input: RunScriptInput!) {
   runScriptOnAsset(input: $input) {
     actionConfigId
-    script { scriptId name }
-    asset { assetId name }
-    status
-    scheduledTime
+    script
+    scriptArguments
+    addedBy
   }
 }
 `;
@@ -269,7 +254,7 @@ mutation runScriptOnAsset($input: RunScriptInput!) {
 export const ALL_MUTATION_DOCUMENTS = [
   CREATE_TICKET,
   UPDATE_TICKET,
-  CREATE_NOTE,
+  CREATE_TICKET_NOTE,
   CREATE_TICKET_CONVERSATION,
   CREATE_WORKLOG_ENTRIES,
   UPDATE_WORKLOG_ENTRY,

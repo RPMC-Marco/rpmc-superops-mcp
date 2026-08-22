@@ -34,6 +34,17 @@ describe("client-safe errors", () => {
     expect(message).toBe("SuperOps request failed");
   });
 
+  it("surfaces sanitized SuperOps clientError codes without message text", () => {
+    const message = toClientSafeError(
+      new SuperOpsError("", undefined, undefined, {
+        clientError: [{ code: "dependent_validation_failed", param: { attributes: ["technician"] } }],
+        classification: "DataFetchingException",
+      })
+    );
+    expect(message).toBe("SuperOps request failed (dependent_validation_failed: technician)");
+    expect(message).not.toContain("password");
+  });
+
   it("sanitizes handler catch output", async () => {
     const config = loadConfig(stdioEnv);
     const client = new SuperOpsClient(

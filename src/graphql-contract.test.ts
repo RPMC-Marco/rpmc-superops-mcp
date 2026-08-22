@@ -155,9 +155,11 @@ describe("graphql contracts", () => {
     }
     expect(blob).not.toMatch(/hardDelete|softDelete|restoreClients|restoreTickets/);
     expect(blob).not.toMatch(/updateKbArticle/);
-    expect(blob).toContain("createNote");
+    expect(blob).toContain("createTicketNote");
+    expect(blob).not.toMatch(/\bcreateNote\(/);
     expect(blob).toContain("createTicket");
     expect(blob).toContain("runScriptOnAsset");
     expect(blob).toContain("createAlert");
+    expect(blob).not.toMatch(/runScriptOnAsset[\s\S]*script\s*\{/);
   });
 });

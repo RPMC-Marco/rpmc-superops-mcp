@@ -8,6 +8,29 @@ import {
 import { sanitizeErrorText } from "./safe-output.js";
 
 const MUTATION_GUARD = "Mutations must use SuperOpsClient.mutate";
+const SAFE_TOKEN = /^[a-zA-Z0-9_]{1,64}$/;
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+/** Codes/attribute names only. Never copies SuperOps message text or ticket bodies. */
+export function sanitizedSuperOpsClientError(error: SuperOpsError): string | undefined {
+  const raw = error.extensions?.clientError;
+  const first = Array.isArray(raw) ? asRecord(raw[0]) : asRecord(raw);
+  if (!first) return undefined;
+  const code = typeof first.code === "string" && SAFE_TOKEN.test(first.code) ? first.code : undefined;
+  if (!code) return undefined;
+  const param = asRecord(first.param);
+  const attrs = Array.isArray(param?.attributes)
+    ? param.attributes
+        .filter((item): item is string => typeof item === "string" && SAFE_TOKEN.test(item))
+        .slice(0, 8)
+    : [];
+  return attrs.length ? `${code}: ${attrs.join(",")}` : code;
+}
 
 export function toClientSafeError(error: unknown): string {
   if (error instanceof SuperOpsTimeoutError) {
@@ -26,7 +49,8 @@ export function toClientSafeError(error: unknown): string {
     if (error.message === MUTATION_GUARD) {
       return MUTATION_GUARD;
     }
-    return "SuperOps request failed";
+    const clientError = sanitizedSuperOpsClientError(error);
+    return clientError ? `SuperOps request failed (${clientError})` : "SuperOps request failed";
   }
   if (error instanceof Error) {
     return sanitizeErrorText(error.message);

@@ -93,7 +93,7 @@ function ticketClient(): SuperOpsClient {
       };
     }
     if (query.includes("mutation updateTicket")) return { updateTicket: { ticketId: "t1", status: "Resolved" } };
-    if (query.includes("mutation createNote")) return { createNote: { noteId: "n1" } };
+    if (query.includes("mutation createTicketNote")) return { createTicketNote: { noteId: "n1" } };
     if (query.includes("getTicketNoteList")) return { getTicketNoteList: [{ noteId: "n1" }] };
     throw new Error(query.slice(0, 80));
   });

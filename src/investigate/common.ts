@@ -1,4 +1,4 @@
-import { toClientSafeError } from "../privacy/errors.js";
+import { sanitizedSuperOpsClientError, toClientSafeError } from "../privacy/errors.js";
 import {
   SuperOpsError,
   SuperOpsHttpError,
@@ -116,6 +116,7 @@ export function failureCode(error: unknown): string {
   if (error instanceof SuperOpsHttpError) return "unavailable";
   if (error instanceof SuperOpsMalformedResponseError) return "unavailable";
   if (isGraphqlValidationError(error)) return "query_failed";
+  if (error instanceof SuperOpsError && sanitizedSuperOpsClientError(error)) return "superops_rejected";
   return "lookup_failed";
 }
 

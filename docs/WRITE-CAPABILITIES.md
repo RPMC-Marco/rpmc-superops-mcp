@@ -14,7 +14,7 @@ Canonical profiles: [AUTHORIZATION-PROFILES.md](AUTHORIZATION-PROFILES.md). The 
 |---|---|---|---|---|
 | create ticket | `createTicket` | write_visible | none when explicitly requested; Closed requires `lifecycle=close` | yes |
 | update ticket | `updateTicket` | write_visible | none when explicitly requested; Resolved is technician work; Closed requires explicit close instruction | yes |
-| create note | `createNote` | write_low PRIVATE / write_visible PUBLIC | none when explicitly requested | yes |
+| create note | `createTicketNote` (live RPMC) | write_low PRIVATE / write_visible PUBLIC | none when explicitly requested | yes |
 | create conversation | `createTicketConversation` | write_visible | none when explicitly requested | yes |
 | create worklog | `createWorklogEntries` | write_low | none when explicitly requested | yes |
 | update worklog | `updateWorklogEntry` | write_low | none when explicitly requested | yes |

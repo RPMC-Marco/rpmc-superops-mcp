@@ -140,6 +140,39 @@ describe("Phase 2 write surface", () => {
     expect(creates).toBe(1);
   });
 
+  it("creates a ticket note through live createTicketNote, not createNote", async () => {
+    const config = loadConfig(stdioEnv);
+    let usedCreateNote = false;
+    const client = clientFor((query, variables) => {
+      if (query.includes("getTicketList")) {
+        return { getTicketList: { tickets: [{ ticketId: "t1", displayId: "220826-0005" }], listInfo: { page: 1, hasMore: false } } };
+      }
+      if (query.includes("query getTicket(")) return { getTicket: { ticketId: "t1", displayId: "220826-0005" } };
+      if (query.includes("mutation createNote")) {
+        usedCreateNote = true;
+        throw new Error("createNote must not be used");
+      }
+      if (query.includes("mutation createTicketNote")) {
+        const input = variables?.input as { ticket?: { ticketId?: string } };
+        expect(input.ticket?.ticketId).toBe("t1");
+        return { createTicketNote: { noteId: "n1", privacyType: "PRIVATE" } };
+      }
+      if (query.includes("getTicketNoteList")) return { getTicketNoteList: [{ noteId: "n1" }] };
+      throw new Error(query.slice(0, 80));
+    });
+    const result = await handleTool(
+      "superops_tickets_add_note",
+      { ticket: "220826-0005", content: "TEST note", privacyType: "PRIVATE", requestId: "req-note-1" },
+      client,
+      config
+    );
+    const payload = JSON.parse(result.content[0]?.text ?? "{}") as { outcome: string; mutation: string };
+    expect(result.isError).toBeFalsy();
+    expect(usedCreateNote).toBe(false);
+    expect(payload.mutation).toBe("createTicketNote");
+    expect(payload.outcome).toBe("complete");
+  });
+
   it("refuses IT-doc writes to PASSWORD fields", async () => {
     const config = loadConfig(stdioEnv);
     const client = clientFor((query) => {
