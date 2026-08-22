@@ -7,14 +7,16 @@ This file accounts for **100% of official `get*` query operations** in that sche
 Status values:
 
 - **IMPLEMENTED / LIVE-CONFIRMED** — MCP tool exists; RPMC tenant confirmed
-- **IMPLEMENTED / NEEDS REVALIDATION** — MCP tool exists; 0.1.9 contract correction not yet live-tested
-- **IMPLEMENTED / NOT TESTABLE / NO DATA** — MCP tool exists; no tenant record/ID was available
+- **IMPLEMENTED / NEEDS REVALIDATION** — MCP tool exists; 0.1.10 contract correction not yet live-tested
+- **IMPLEMENTED / NOT TESTABLE / NO DISCOVERABLE ID** — MCP tool exists; no tenant record/ID was available
+- **LIVE-CONTRACT-CONFIRMED / NO DATA** — contract accepted; tenant returned no rows
 - **LIVE-UNSUPPORTED** — RPMC tenant rejects the query after the official contract was honored
 - **EXCLUDED / DEPRECATED** — SuperOps replaced it with Field APIs
 - **EXCLUDED / REDUNDANT** — same information already exposed
 - **EXCLUDED / LIVE UNSUPPORTED** — RPMC tenant rejects the query (existing 0.1.7)
 - **DEFERRED / SPECIAL-PURPOSE** — not currently usable at RPMC; not rejected forever
 - **PLANNED FUTURE ADDON** — not a GraphQL `get*` (KB article body download)
+- **PLANNED SECURITY CAPABILITY** — human-authorized secret disclosure; not implemented
 - **PHASE 2 PARKED** — mutation; not a read
 
 Official KB article *body* is a separate SuperOps download API (`module=KB_ARTICLE_CONTENT`), not a GraphQL query. It is **PLANNED FUTURE ADDON**. GraphQL `getKbItem`/`getKbItems` return description/summary only. 0.1.9 does **not** implement the download API.
@@ -46,18 +48,18 @@ Official KB article *body* is a separate SuperOps download API (`module=KB_ARTIC
 
 ## Newly implemented (44)
 
-0.1.8 live pass accounted for all 44. 0.1.9 corrects selection/input contracts that caused several of those failures. Do not mark 0.1.9 corrections LIVE-CONFIRMED from unit tests.
+0.1.9 live-confirmed additional reads after the first correction batch. 0.1.10 corrects the remaining selection/privacy defects. Do not mark 0.1.10 corrections LIVE-CONFIRMED from unit tests.
 
 | # | Query | MCP tool | Status after 0.1.8 live / 0.1.9 correction |
 |---|---|---|---|
 | 1 | getAllFields | `superops_fields_all` | LIVE-CONFIRMED |
 | 2 | getField | `superops_fields_get` | LIVE-CONFIRMED |
 | 3 | getFields | `superops_fields_lookup` | LIVE-CONFIRMED |
-| 4 | getAssetCustomFields | `superops_asset_custom_fields` | IMPLEMENTED / NEEDS REVALIDATION (modules now required) |
+| 4 | getAssetCustomFields | `superops_asset_custom_fields` | LIVE-CONTRACT-CONFIRMED / NO DATA |
 | 5 | getAssetDiskDetails | `superops_assets_disks` | LIVE-CONFIRMED |
 | 6 | getAssetUserLog | `superops_assets_user_log` | LIVE-CONFIRMED |
 | 7 | getDeviceCategories | `superops_device_categories` | LIVE-CONFIRMED |
-| 8 | getClientStageList | `superops_org_catalog` kind=`client_stage` | IMPLEMENTED / NEEDS REVALIDATION (`statuses` now nested) |
+| 8 | getClientStageList | `superops_org_catalog` kind=`client_stage` | LIVE-CONFIRMED |
 | 9 | getClientUser | `superops_client_users_get` | LIVE-CONFIRMED |
 | 10 | getClientUserList | `superops_client_users_list` | LIVE-CONFIRMED |
 | 11 | getClientUserAssociationList | `superops_client_users_associations` | LIVE-CONFIRMED |
@@ -66,31 +68,31 @@ Official KB article *body* is a separate SuperOps download API (`module=KB_ARTIC
 | 14 | getDesignationList | `superops_org_catalog` kind=`designation` | LIVE-CONFIRMED |
 | 15 | getTeamList | `superops_org_catalog` kind=`team` | LIVE-CONFIRMED |
 | 16 | getBusinessFunctionList | `superops_org_catalog` kind=`business_function` | LIVE-CONFIRMED |
-| 17 | getClientContract | `superops_contracts_get` | NOT TESTABLE / NO DATA (blocked by list failure) |
-| 18 | getClientContractList | `superops_contracts_list` | IMPLEMENTED / NEEDS REVALIDATION (`contract` now nested) |
+| 17 | getClientContract | `superops_contracts_get` | LIVE-CONFIRMED |
+| 18 | getClientContractList | `superops_contracts_list` | LIVE-CONFIRMED |
 | 19 | getSLAList | `superops_org_catalog` kind=`sla` | LIVE-CONFIRMED |
-| 20 | getOfferedItems | `superops_offered_items` | IMPLEMENTED / NEEDS REVALIDATION (wrapper already ListInfoInput; 0.1.8 error was misclassified) |
-| 21 | getServiceCatalogItem | `superops_catalog_get` | IMPLEMENTED / NEEDS REVALIDATION (`serviceTypeItem` nested; use catalog list `itemId`) |
-| 22 | getServiceCatalogItemList | `superops_catalog_list` | IMPLEMENTED / NEEDS REVALIDATION (`serviceTypeItem` nested) |
+| 20 | getOfferedItems | `superops_offered_items` | IMPLEMENTED / NEEDS REVALIDATION (0.1.10 nests live object associations) |
+| 21 | getServiceCatalogItem | `superops_catalog_get` | LIVE-CONFIRMED |
+| 22 | getServiceCatalogItemList | `superops_catalog_list` | LIVE-CONFIRMED |
 | 23 | getServiceCategoryList | `superops_catalog_categories` | LIVE-CONFIRMED |
-| 24 | getServiceItem | `superops_services_get` | IMPLEMENTED / NEEDS REVALIDATION (use service list `itemId`, not catalog/worklog IDs) |
-| 25 | getServiceItemList | `superops_services_list` | IMPLEMENTED / NEEDS REVALIDATION |
-| 26 | getTax | `superops_taxes_get` | NOT TESTABLE / NO DATA |
-| 27 | getTaxList | `superops_taxes_list` | IMPLEMENTED / NEEDS REVALIDATION (`rates` now nested) |
+| 24 | getServiceItem | `superops_services_get` | NOT TESTABLE / NO DISCOVERABLE ID |
+| 25 | getServiceItemList | `superops_services_list` | IMPLEMENTED / NEEDS REVALIDATION (0.1.10 complete Tax nest) |
+| 26 | getTax | `superops_taxes_get` | LIVE-CONFIRMED |
+| 27 | getTaxList | `superops_taxes_list` | LIVE-CONFIRMED |
 | 28 | getPaymentMethodList | `superops_payment_config` kind=`method` | LIVE-CONFIRMED |
 | 29 | getPaymentTermList | `superops_payment_config` kind=`term` | LIVE-CONFIRMED |
-| 30 | getInvoice | `superops_invoices_get` | IMPLEMENTED / NEEDS REVALIDATION (`taxes` now nested; identifier is list `invoiceId`) |
+| 30 | getInvoice | `superops_invoices_get` | LIVE-CONFIRMED |
 | 31 | getInvoiceList | `superops_invoices_list` | LIVE-CONFIRMED |
 | 32 | getInvoiceItemList | `superops_invoice_items` | LIVE-CONFIRMED |
-| 33 | getItDocumentation | `superops_itdocs_get` | LIVE-CONFIRMED (0.1.9 adds secret-field redaction; re-check privacy) |
-| 34 | getItDocumentationList | `superops_itdocs_list` | LIVE-CONFIRMED (0.1.9 adds secret-field redaction; re-check privacy) |
+| 33 | getItDocumentation | `superops_itdocs_get` | LIVE-CONFIRMED (privacy PARTIAL on 0.1.9; 0.1.10 semantic redaction NEEDS REVALIDATION) |
+| 34 | getItDocumentationList | `superops_itdocs_list` | LIVE-CONFIRMED (privacy PARTIAL on 0.1.9; 0.1.10 semantic redaction NEEDS REVALIDATION) |
 | 35 | getItDocumentationCategories | `superops_itdocs_categories` | LIVE-CONFIRMED |
-| 36 | getKbItem | `superops_kb_get` | IMPLEMENTED / NEEDS REVALIDATION (`visibility` now nested; use list `itemId`) |
+| 36 | getKbItem | `superops_kb_get` | LIVE-CONFIRMED (article + collection) |
 | 37 | getKbItems | `superops_kb_list` | LIVE-CONFIRMED |
 | 38 | getScriptList | `superops_scripts_list` | LIVE-CONFIRMED |
 | 39 | getScriptListByType | `superops_scripts_by_type` | LIVE-CONFIRMED |
-| 40 | getTask | `superops_tasks_get` | NOT TESTABLE / NO DATA |
-| 41 | getTaskList | `superops_tasks_list` | IMPLEMENTED / NEEDS REVALIDATION (GetTaskListInput.listInfo wrapper already official) |
+| 40 | getTask | `superops_tasks_get` | NOT TESTABLE / NO DISCOVERABLE ID |
+| 41 | getTaskList | `superops_tasks_list` | IMPLEMENTED / NEEDS REVALIDATION (0.1.10 nests technician/ticket/workItem/techGroup) |
 | 42 | getWorkStatusList | `superops_work_statuses` | LIVE-CONFIRMED |
 | 43 | getWorklogEntries | `superops_worklogs_list` | LIVE-CONFIRMED |
 | 44 | getHolidayList | `superops_org_catalog` kind=`holiday` | LIVE-CONFIRMED |
@@ -135,6 +137,8 @@ All `create*` / `update*` / `delete*` / `resolveAlerts` / `runScriptOnAsset` / r
 - `lookup_failed` — opaque get/query failure. Never rewritten to `not_found`.
 - `not_found` — only after a successful query that returns no record.
 
-## IT documentation secrets (0.1.9)
+## IT documentation secrets (0.1.10)
 
-`ItDocumentation.customFields` can hold UI data including license keys. PASSWORD/SECURE_TEXT values and product-key-shaped / Key-Serial labeled values are redacted. Ordinary notes, product names, URLs, and server names are preserved. Redaction metadata records presence without the secret. Secrets are not written to audit logs.
+Default MCP reads redact PASSWORD / SECURE_TEXT and product/license/activation-key values, including non-canonical Key/Serial map representations. Hardware/asset `Serial Number` values stay visible unless the surrounding record is a license/product-key document. Redaction metadata records presence without the secret. Secrets are not written to audit logs.
+
+A future **human-authorized, per-field** disclosure path is a **PLANNED SECURITY CAPABILITY**. Phase 1 does not implement it and does not expose `includeSecrets` or any AI-controlled bypass.

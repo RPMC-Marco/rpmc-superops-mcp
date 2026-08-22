@@ -99,3 +99,27 @@ After QNAP 0.1.9 deploy and full MCP reconnect:
 | IT docs get/list | secret redaction | product names kept; Key/Serial values null + redaction metadata | do not log secrets |
 
 Safe failure for unfiltered contract errors is now `query_failed`, not `unsupported_filter`. Local `unmonitored=true` remains `unsupported_filter` with zero SuperOps calls.
+
+## 0.1.9 targeted live result (QNAP 0.1.9 / `d9df6b7`)
+
+**LIVE-CONFIRMED:** getClientStageList; getClientContractList → getClientContract; getServiceCatalogItemList → getServiceCatalogItem; getTaxList → getTax; getInvoice (list `invoiceId`); getKbItem (article + collection).
+
+**LIVE-CONTRACT-CONFIRMED / NO DATA:** getAssetCustomFields Windows / Mac / array. Omitted modules: local `malformed_input`.
+
+**FAILED / query_failed:** getOfferedItems, getServiceItemList, getTaskList (object fields still selected as leaves). Official docs still label Task/OfferedItem associations as JSON; live RPMC required nested selections.
+
+**NOT TESTABLE / NO DISCOVERABLE ID:** getServiceItem, getTask.
+
+**IT-doc privacy:** PARTIAL. Canonical product keys redacted; one non-canonical Key/Serial map representation leaked. Hardware serials must remain visible.
+
+## 0.1.10 targeted revalidation (do not mark LIVE-CONFIRMED from unit tests)
+
+| Query | Why revalidate | Success looks like |
+|---|---|---|
+| getOfferedItems | nest serviceItem/client/site/workItem/technician | page of offered items |
+| getServiceItemList | complete Tax nest on salesTax; keep `itemId` | page with canonical service `itemId` |
+| getServiceItem | only if list yields a real `itemId` | exact get; else remain NOT TESTABLE |
+| getTaskList | nest technician/techGroup/ticket/workItem | page with canonical `taskId` |
+| getTask | only if list yields a real `taskId` | exact get; else remain NOT TESTABLE |
+| IT-doc Product Key privacy | semantic Key/Serial map redaction | non-canonical license values absent; metadata present |
+| ordinary hardware serial | must stay visible | `Serial Number` preserved |

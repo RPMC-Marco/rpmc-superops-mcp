@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ALL_QUERY_DOCUMENTS, GET_ALERTS_FOR_ASSET, GET_TECHNICIAN_LIST, GET_TICKET, GET_TICKET_LIST, GET_UNMONITORED_ASSET_LIST } from "./superops/queries.js";
-import { EXPANDED_QUERY_DOCUMENTS, OBJECT_TYPED_QUERY_DOCUMENTS } from "./superops/queries-expanded.js";
+import { EXPANDED_QUERY_DOCUMENTS, GET_OFFERED_ITEMS, GET_SERVICE_ITEM_LIST, GET_TASK_LIST, OBJECT_TYPED_QUERY_DOCUMENTS } from "./superops/queries-expanded.js";
 
 const NESTED_ASSOCIATION = /\b(client|site|requester|technician|techGroup|sla|asset)\s*\{/;
 
@@ -67,7 +67,21 @@ describe("graphql contracts", () => {
     expect(blob).toMatch(/visibility \{\s*mappingId/);
     expect(blob).toMatch(/taxes \{\s*id/);
     expect(blob).toMatch(/contract \{\s*contractId/);
+    expect(blob).toMatch(/serviceItem \{ itemId name quantityType \}/);
+    expect(blob).toMatch(/technician \{ userId name \}/);
+    expect(blob).toMatch(/techGroup \{ groupId name \}/);
+    expect(blob).toMatch(/ticket \{ ticketId displayId subject \}/);
+    expect(blob).toMatch(/workItem \{ workId displayId module \}/);
+    expect(blob).toMatch(/salesTax \{ taxId name totalRate rates \{ rateId name rateValue \} \}/);
     expect(blob).not.toMatch(/KB_ARTICLE_CONTENT/);
+  });
+
+  it("does not select OfferedItem, ServiceItem, or Task object fields as leaves", () => {
+    expect(GET_OFFERED_ITEMS).not.toMatch(/^\s+(serviceItem|client|site|workItem|technician)\s*$/m);
+    expect(GET_SERVICE_ITEM_LIST).not.toMatch(/^\s+(category|salesTax|blockItemAdjustedItems)\s*$/m);
+    expect(GET_TASK_LIST).not.toMatch(/^\s+(technician|techGroup|ticket|workItem)\s*$/m);
+    expect(GET_SERVICE_ITEM_LIST).toContain("itemId");
+    expect(GET_TASK_LIST).toContain("taskId");
   });
 
   it("covers all 44 approved expansion queries", () => {

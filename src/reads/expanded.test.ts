@@ -317,13 +317,13 @@ describe("expanded Phase 1 reads", () => {
         getItDocumentation: {
           itDocId: "217184133502664704",
           name: "RMS MS Office Pro Plus 2024",
-          customFields: { udf3text: "MS Office Pro Plus 2024", udf6text: "CVT99-RN2W6-JHK9G-WF3DP-8XGJ3" },
+          customFields: { udf3text: "Contoso Office Suite", udf6text: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE" },
         },
       }))
     );
     const text = JSON.stringify(result);
-    expect(text).toContain("MS Office Pro Plus 2024");
-    expect(text).not.toContain("CVT99-RN2W6-JHK9G-WF3DP-8XGJ3");
+    expect(text).toContain("Contoso Office Suite");
+    expect(text).not.toContain("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE");
     expect(text).toContain("customFieldsRedaction");
   });
 
