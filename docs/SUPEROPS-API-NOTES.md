@@ -65,11 +65,12 @@ Full read-surface live validation against QNAP 0.1.6: **PASS WITH CORRECTIONS**.
 - **Unsupported:** `getAssetList` `lastCommunicatedTime` sort; `getUnMonitoredAssetList`
 - JSON-scalar `site.client.accountId` arrived as an unquoted JSON number and lost precision under `JSON.parse` (corrected in 0.1.7 at the parse boundary)
 
-0.1.10 is live on QNAP (commit `ba754ad26539a298f19a18e255bdd04317fb3de8`). 0.1.11 is the undeployed remaining-selection / privacy-correction candidate.
+0.1.11 is live on QNAP (commit `849d010a787828e46e02a27d6623bc4ad078d8c1`). 0.1.12 is the undeployed OfferedItem `type` / license-Notes correction candidate.
 
 Official Task/OfferedItem association fields are documented as GraphQL `JSON` scalars. 0.1.9/0.1.10 assumed live required nested selections because MCP-safe errors were only `query_failed`. Development-time QUERY-only probes against the RPMC tenant (page 1 / pageSize 1, no mutations) established:
 
 - OfferedItem `serviceItem` / `client` / `site` / `workItem` / `technician` are live JSON leaves. Nesting them returns `SubSelectionNotAllowed` (0.1.10 root cause).
+- OfferedItem `type` is official `OfferedItemType!`. Live RPMC rows can have null `type`; selecting it fails the whole page (`Cannot return null for non-nullable type: 'OfferedItemType'`). 0.1.12 omits `type`. `status` serializes. `serviceItem` / `workItem` JSON still identify the work.
 - Task `technician` / `techGroup` / `ticket` / `workItem` are live JSON leaves. Nesting them returns `SubSelectionNotAllowed` (0.1.10 root cause). `getTaskList` live input is official `GetTaskListInput` (`ListInfoInput` is `VariableTypeMismatch`). Task `module` is a live `TaskModule` enum that cannot serialize `PROJECT`; omit it. Official docs already say `workItem.module` replaces `module`.
 - ServiceItem `category` is a live `ServiceCategory` object (`categoryId`/`name`). ServiceItem `salesTax` is a live `Tax` object. `salesTax.totalRate` on ServiceItem causes SuperOps `Internal Server Error` (0.1.8–0.1.10 root cause). `taxId`, `name`, and `rates { rateId name rateValue }` are accepted. Catalog/tax `totalRate` remains live-confirmed on those other types — do not change them.
 - `ItDocumentation` has no `type` / `typeId` field (official and live). Category `customFields` definitions (`columnName`/`label`/`fieldType`) are the semantic source for document UDF maps.
@@ -179,4 +180,4 @@ Audit metadata is a whitelist (resolution method, section state, truncation, log
 
 ### 0.1.8 Phase 1 read expansion
 
-44 additional official reads are implemented as explicit domain MCP tools. Full accounting: `docs/OFFICIAL-READ-INVENTORY.md`. 0.1.9 live-confirmed additional list/get chains (client stage, contracts, catalog, tax, invoice get, KB get). 0.1.10 live still failed OfferedItem/ServiceItem/Task lists and leaked one category-defined IT-doc UDF. 0.1.11 corrects those remaining selections and applies category metadata to IT-doc UDF values. IT documentation GraphQL type has no body field. KB article HTML is a separate SuperOps download API (planned future addon, not fetched). Human-authorized secret disclosure is a planned security capability. Worklogs require official `module` (TICKET|PROJECT). Scripts are list-only. Writes remain unregistered.
+44 additional official reads are implemented as explicit domain MCP tools. Full accounting: `docs/OFFICIAL-READ-INVENTORY.md`. 0.1.9 live-confirmed additional list/get chains (client stage, contracts, catalog, tax, invoice get, KB get). 0.1.11 live-confirmed ServiceItem and Task list→get plus IT-doc UDF mapping. 0.1.12 omits OfferedItem `type` and redacts license-context freeform Notes. IT documentation GraphQL type has no body field. KB article HTML is a separate SuperOps download API (planned future addon, not fetched). Human-authorized secret disclosure is a planned security capability. Worklogs require official `module` (TICKET|PROJECT). Scripts are list-only. Writes remain unregistered.

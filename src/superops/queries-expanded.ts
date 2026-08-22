@@ -368,7 +368,6 @@ query getOfferedItems($input: ListInfoInput) {
   getOfferedItems(input: $input) {
     items {
       itemId
-      type
       billDate
       status
       serviceItem

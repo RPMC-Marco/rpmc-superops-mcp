@@ -59,7 +59,7 @@ export async function handleTool(
       case "rpmc_status":
         return jsonResult({
           product: "rpmc-superops-mcp",
-          version: "0.1.11",
+          version: "0.1.12",
           phase: 1,
           readonly: true,
           writesRegistered: false,

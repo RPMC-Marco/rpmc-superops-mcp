@@ -75,6 +75,8 @@ describe("graphql contracts", () => {
     expect(GET_OFFERED_ITEMS).toMatch(/^\s+serviceItem\s*$/m);
     expect(GET_OFFERED_ITEMS).toMatch(/^\s+client\s*$/m);
     expect(GET_OFFERED_ITEMS).toMatch(/^\s+technician\s*$/m);
+    expect(GET_OFFERED_ITEMS).toContain("itemId");
+    expect(GET_OFFERED_ITEMS).not.toMatch(/^\s+type\s*$/m);
     expect(GET_OFFERED_ITEMS).not.toMatch(/serviceItem \{/);
     expect(GET_SERVICE_ITEM_LIST).toContain("itemId");
     expect(GET_SERVICE_ITEM_LIST).toContain("category { categoryId name }");

@@ -386,6 +386,55 @@ describe("expanded Phase 1 reads", () => {
     expect((listed?.provenance as { logicalOperations: string[] }).logicalOperations).toContain("getItDocumentationCategories");
   });
 
+  it("redacts license-context freeform Notes on both IT-doc list and get", async () => {
+    const synthetic = "12345-678-9012345-67890";
+    const categories = {
+      getItDocumentationCategories: [
+        {
+          typeId: "1002",
+          name: "Product Key",
+          customFields: [
+            { columnName: "udf3text", label: "Product Name", fieldType: "TEXT" },
+            { columnName: "udf5para", label: "Notes", fieldType: "PARAGRAPH" },
+            { columnName: "udf6text", label: "Key/Serial", fieldType: "TEXT" },
+          ],
+        },
+      ],
+    };
+    const document = {
+      itDocId: "217184133502664704",
+      name: "Finance workstation license",
+      customFields: {
+        udf3text: "Contoso Office Suite",
+        udf5para: `Installed on finance PCs. Code ${synthetic} today.`,
+        udf6text: "office-pack-temp-key-9182",
+      },
+    };
+    const listed = await handleExpandedRead(
+      "superops_itdocs_list",
+      { typeId: "1002", page: 1, pageSize: 10 },
+      fakeClient((query) => {
+        if (query.includes("getItDocumentationCategories")) return categories;
+        return { getItDocumentationList: { documents: [document], listInfo: { page: 1, pageSize: 10, hasMore: false } } };
+      })
+    );
+    const got = await handleExpandedRead(
+      "superops_itdocs_get",
+      { itDocId: "217184133502664704" },
+      fakeClient((query) => {
+        if (query.includes("getItDocumentationCategories")) return categories;
+        return { getItDocumentation: document };
+      })
+    );
+    for (const result of [listed, got]) {
+      const text = JSON.stringify(result);
+      expect(text).toContain("Contoso Office Suite");
+      expect(text).toContain("Installed on finance PCs.");
+      expect(text).not.toContain(synthetic);
+      expect(text).not.toContain("office-pack-temp-key-9182");
+    }
+  });
+
   it("preserves large JSON IDs on expanded gets", async () => {
     const bigId = "9001114136934215681";
     const { SuperOpsClient } = await import("../superops/client.js");

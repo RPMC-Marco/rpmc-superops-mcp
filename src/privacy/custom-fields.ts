@@ -20,6 +20,10 @@ const LICENSE_KEY_LABEL = /^(key|product\s*key|license(?:\s*key)?|activation(?:\
 const HARDWARE_SERIAL_LABEL = /\b(serial\s*number|asset\s*serial|device\s*serial|hardware\s*serial|service\s*tag)\b/i;
 const BARE_SERIAL_LABEL = /^serial$/i;
 const GENERIC_SECRET_LABEL = /\b(password|passwd|passphrase|secret|api[_\s-]?key)\b/i;
+const FREEFORM_LABEL = /^(notes|description|details|comments)$/i;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const HYPHENATED_KEYISH = /\b[A-Za-z0-9]{2,8}(?:-[A-Za-z0-9]{2,8}){2,}\b/g;
+const DENSE_ALNUM = /[A-Za-z0-9]{16,}/;
 
 export interface CustomFieldRedaction {
   columnName?: string;
@@ -27,7 +31,7 @@ export interface CustomFieldRedaction {
   fieldType?: string;
   valuePresent: boolean;
   redacted: true;
-  reason: "secret_field_type" | "secret_field_label" | "license_key_value";
+  reason: "secret_field_type" | "secret_field_label" | "license_key_value" | "license_freeform";
 }
 
 export interface CategoryFieldDef {
@@ -78,6 +82,43 @@ function shouldRedactByLabel(label: string | undefined, licenseContext: boolean)
   if (isHardwareSerialLabel(text)) return licenseContext;
   if (BARE_SERIAL_LABEL.test(text)) return licenseContext;
   return false;
+}
+
+function isFreeformField(meta: { label?: string; fieldType?: string }): boolean {
+  if ((meta.fieldType ?? "").toUpperCase() === "PARAGRAPH") return true;
+  return FREEFORM_LABEL.test(normalizeLabel(meta.label ?? ""));
+}
+
+function redactHyphenatedKeyish(text: string): string {
+  return text.replace(HYPHENATED_KEYISH, (match) => (ISO_DATE.test(match) ? match : "[redacted]"));
+}
+
+function remainingLicenseLike(text: string): boolean {
+  const scratch = text.replace(/\[redacted\]/gi, " ").replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ");
+  if (DENSE_ALNUM.test(scratch)) return true;
+  const leftover = scratch.match(HYPHENATED_KEYISH) ?? [];
+  return leftover.some((match) => !ISO_DATE.test(match));
+}
+
+function redactLicenseFreeform(
+  raw: string,
+  meta: { columnName?: string; label?: string; fieldType?: string }
+): { value: unknown; notice?: CustomFieldRedaction } {
+  let next = raw.replace(PRODUCT_KEY, "[redacted]");
+  next = redactHyphenatedKeyish(next);
+  if (remainingLicenseLike(next)) {
+    return {
+      value: null,
+      notice: { ...meta, valuePresent: true, redacted: true, reason: "license_freeform" },
+    };
+  }
+  if (next !== raw) {
+    return {
+      value: next,
+      notice: { ...meta, valuePresent: true, redacted: true, reason: "license_key_value" },
+    };
+  }
+  return { value: raw };
 }
 
 function valuePresent(value: unknown): boolean {
@@ -206,6 +247,9 @@ function redactScalar(
       value: null,
       notice: { ...meta, fieldType: fieldType || undefined, valuePresent: true, redacted: true, reason: "secret_field_label" },
     };
+  }
+  if (licenseContext && typeof raw === "string" && isFreeformField({ label: meta.label, fieldType })) {
+    return redactLicenseFreeform(raw, { ...meta, fieldType: fieldType || undefined });
   }
   if (scalarLooksLikeProductKey(raw)) {
     return {

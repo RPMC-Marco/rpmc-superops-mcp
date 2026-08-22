@@ -124,16 +124,20 @@ Safe failure for unfiltered contract errors is now `query_failed`, not `unsuppor
 
 **LIVE-CONFIRMED:** ordinary hardware / asset `serialNumber` remained visible.
 
-## 0.1.11 targeted revalidation (do not mark LIVE-CONFIRMED from unit tests or development probes)
+## 0.1.11 targeted live result (QNAP 0.1.11 / `849d010`)
 
-0.1.11 is undeployed. Development-time QUERY-only contract probes established the accepted selections below. Formal live classification still requires the deployed candidate.
+`readonly=true`, `writesRegistered=false`, 60 read / 0 write.
+
+**LIVE-CONFIRMED:** getServiceItemList → getServiceItem (list-derived `itemId`); getTaskList → getTask (list-derived `taskId`); IT-doc category/UDF semantic mapping; Key/Serial `udf6text` redaction on list and get; ordinary hardware / asset `serialNumber` remains visible.
+
+**FAILED / query_failed:** getOfferedItems. Leaf JSON associations were accepted. Live `type` (`OfferedItemType!`) is null on some populated rows; GraphQL cannot serialize that non-nullable enum.
+
+**PRIVACY FAILURE:** Product Key / software-license freeform Notes (`udf5para`) can contain a license/key-like value. Exact-get returned it. List often omits `udf5para`, but that is not a privacy guarantee. Key/Serial UDF itself was correctly redacted.
+
+## 0.1.12 targeted revalidation (do not mark LIVE-CONFIRMED from unit tests or development probes)
 
 | Query | Why revalidate | Success looks like |
 |---|---|---|
-| getOfferedItems | leaf JSON associations (nests are `SubSelectionNotAllowed`) | page of offered items with identity/billing/work JSON |
-| getServiceItemList | keep `itemId` + category nest; `salesTax` without `totalRate` | page with canonical service `itemId` |
-| getServiceItem | shared fragment omits `salesTax.totalRate`; use list `itemId` only | exact get; else remain NOT TESTABLE |
-| getTaskList | `GetTaskListInput`; leaf JSON associations; omit `module` enum | page with canonical `taskId` |
-| getTask | same shared fragment; use list `taskId` only | exact get; else remain NOT TESTABLE |
-| IT-doc list + get privacy | category custom-field semantics applied to opaque UDF keys | non-canonical Key/Serial values absent; metadata present |
+| getOfferedItems | omit live-null `type` enum; keep leaf associations + billing/work identity | page of offered items with `itemId` |
+| IT-doc list + get Notes | license-context freeform substring / fail-closed | Notes secret absent; product/asset names kept |
 | ordinary hardware serial | must stay visible | asset `serialNumber` / hardware Serial Number preserved |

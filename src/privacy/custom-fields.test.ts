@@ -177,6 +177,70 @@ describe("IT documentation secret-field policy", () => {
     expect(rec.customFields.Notes).toBe("Use site-to-site profile B");
   });
 
+  it("redacts a license-like substring from Product Key Notes and keeps surrounding text", () => {
+    const synthetic = "12345-678-9012345-67890";
+    const result = applyItDocSecretPolicy(
+      {
+        name: "Finance workstation license",
+        customFields: {
+          udf3text: "Contoso Office Suite",
+          udf5para: `Installed on finance PCs. Code ${synthetic} today.`,
+          udf6text: SYNTHETIC_NONCANONICAL,
+        },
+      },
+      { categories: [PRODUCT_KEY_CATEGORY], typeId: "1002" }
+    );
+    const rec = result as { customFields: Record<string, unknown> };
+    expect(rec.customFields.udf3text).toBe("Contoso Office Suite");
+    expect(rec.customFields.udf6text).toBeNull();
+    expect(rec.customFields.udf5para).toBe("Installed on finance PCs. Code [redacted] today.");
+    expect(JSON.stringify(result)).not.toContain(synthetic);
+    expect(JSON.stringify(result)).not.toContain(SYNTHETIC_NONCANONICAL);
+  });
+
+  it("fails closed on license-context Notes when remaining text still looks credential-like", () => {
+    const blob = "synthblobABCDEFGHIJKLMNOPQRSTUVmixedvalue9182";
+    const result = applyItDocSecretPolicy(
+      {
+        name: "Finance workstation license",
+        customFields: { udf5para: `See attachment.\n${blob}` },
+      },
+      { categories: [PRODUCT_KEY_CATEGORY], typeId: "1002" }
+    );
+    const rec = result as { customFields: Record<string, unknown>; customFieldsRedaction?: Array<{ reason: string }> };
+    expect(rec.customFields.udf5para).toBeNull();
+    expect(rec.customFieldsRedaction?.some((item) => item.reason === "license_freeform")).toBe(true);
+    expect(JSON.stringify(result)).not.toContain(blob);
+  });
+
+  it("keeps ordinary notes in a non-license category, including hyphenated inventory text", () => {
+    const result = applyItDocSecretPolicy(
+      {
+        name: "Front desk printer",
+        customFields: { udf6text: "ROW-B-04", udf8: "PN-778812", Notes: "Shelf 200826-0001, replaced 2026-12-31" },
+      },
+      { categories: [HARDWARE_NOTE_CATEGORY], typeId: "1003" }
+    );
+    const rec = result as { customFields: Record<string, unknown> };
+    expect(rec.customFields.Notes).toBe("Shelf 200826-0001, replaced 2026-12-31");
+    expect(rec.customFields.udf6text).toBe("ROW-B-04");
+    expect(rec.customFields.udf8).toBe("PN-778812");
+  });
+
+  it("does not honor an includeSecrets-style bypass flag", () => {
+    const result = applyItDocSecretPolicy(
+      {
+        name: "Finance workstation license",
+        customFields: { udf6text: SYNTHETIC_NONCANONICAL, udf5para: "Code 12345-678-9012345-67890" },
+      },
+      { categories: [PRODUCT_KEY_CATEGORY], typeId: "1002", includeSecrets: true } as never
+    );
+    const rec = result as { customFields: Record<string, unknown> };
+    expect(rec.customFields.udf6text).toBeNull();
+    expect(JSON.stringify(result)).not.toContain(SYNTHETIC_NONCANONICAL);
+    expect(JSON.stringify(result)).not.toContain("12345-678-9012345-67890");
+  });
+
   it("redacts nested Key/Serial maps that do not use the canonical product-key format", () => {
     const result = applyItDocSecretPolicy({
       name: "Software license packet",

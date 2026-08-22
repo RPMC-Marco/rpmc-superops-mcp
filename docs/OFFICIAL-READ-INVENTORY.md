@@ -7,7 +7,7 @@ This file accounts for **100% of official `get*` query operations** in that sche
 Status values:
 
 - **IMPLEMENTED / LIVE-CONFIRMED** — MCP tool exists; RPMC tenant confirmed
-- **IMPLEMENTED / NEEDS REVALIDATION** — MCP tool exists; 0.1.11 contract correction not yet live-tested
+- **IMPLEMENTED / NEEDS REVALIDATION** — MCP tool exists; 0.1.12 contract correction not yet live-tested
 - **IMPLEMENTED / NOT TESTABLE / NO DISCOVERABLE ID** — MCP tool exists; no tenant record/ID was available
 - **LIVE-CONTRACT-CONFIRMED / NO DATA** — contract accepted; tenant returned no rows
 - **LIVE-UNSUPPORTED** — RPMC tenant rejects the query after the official contract was honored
@@ -48,7 +48,7 @@ Official KB article *body* is a separate SuperOps download API (`module=KB_ARTIC
 
 ## Newly implemented (44)
 
-0.1.9 live-confirmed additional reads after the first correction batch. 0.1.10 live still failed three lists and leaked one category-defined IT-doc secret. 0.1.11 corrects those remaining selection/privacy defects. Do not mark 0.1.11 corrections LIVE-CONFIRMED from unit tests or development probes.
+0.1.11 live-confirmed ServiceItem and Task list→get, plus IT-doc UDF mapping. 0.1.12 corrects remaining OfferedItem `type` serialization and license-context Notes. Do not mark 0.1.12 corrections LIVE-CONFIRMED from unit tests or development probes.
 
 | # | Query | MCP tool | Status after 0.1.8 live / 0.1.9 correction |
 |---|---|---|---|
@@ -71,12 +71,12 @@ Official KB article *body* is a separate SuperOps download API (`module=KB_ARTIC
 | 17 | getClientContract | `superops_contracts_get` | LIVE-CONFIRMED |
 | 18 | getClientContractList | `superops_contracts_list` | LIVE-CONFIRMED |
 | 19 | getSLAList | `superops_org_catalog` kind=`sla` | LIVE-CONFIRMED |
-| 20 | getOfferedItems | `superops_offered_items` | IMPLEMENTED / NEEDS REVALIDATION (0.1.11 leaf JSON associations) |
+| 20 | getOfferedItems | `superops_offered_items` | IMPLEMENTED / NEEDS REVALIDATION (0.1.12 omits live-null `type` enum) |
 | 21 | getServiceCatalogItem | `superops_catalog_get` | LIVE-CONFIRMED |
 | 22 | getServiceCatalogItemList | `superops_catalog_list` | LIVE-CONFIRMED |
 | 23 | getServiceCategoryList | `superops_catalog_categories` | LIVE-CONFIRMED |
-| 24 | getServiceItem | `superops_services_get` | IMPLEMENTED / NEEDS REVALIDATION (shared fragment; list should now yield `itemId`) |
-| 25 | getServiceItemList | `superops_services_list` | IMPLEMENTED / NEEDS REVALIDATION (0.1.11 omits ServiceItem `salesTax.totalRate`) |
+| 24 | getServiceItem | `superops_services_get` | LIVE-CONFIRMED |
+| 25 | getServiceItemList | `superops_services_list` | LIVE-CONFIRMED |
 | 26 | getTax | `superops_taxes_get` | LIVE-CONFIRMED |
 | 27 | getTaxList | `superops_taxes_list` | LIVE-CONFIRMED |
 | 28 | getPaymentMethodList | `superops_payment_config` kind=`method` | LIVE-CONFIRMED |
@@ -84,15 +84,15 @@ Official KB article *body* is a separate SuperOps download API (`module=KB_ARTIC
 | 30 | getInvoice | `superops_invoices_get` | LIVE-CONFIRMED |
 | 31 | getInvoiceList | `superops_invoices_list` | LIVE-CONFIRMED |
 | 32 | getInvoiceItemList | `superops_invoice_items` | LIVE-CONFIRMED |
-| 33 | getItDocumentation | `superops_itdocs_get` | LIVE-CONFIRMED (0.1.10 PRIVACY FAILURE; 0.1.11 category/UDF semantics NEEDS REVALIDATION) |
-| 34 | getItDocumentationList | `superops_itdocs_list` | LIVE-CONFIRMED (0.1.10 PRIVACY FAILURE; 0.1.11 category/UDF semantics NEEDS REVALIDATION) |
+| 33 | getItDocumentation | `superops_itdocs_get` | LIVE-CONFIRMED (UDF mapping); 0.1.12 Notes policy NEEDS REVALIDATION |
+| 34 | getItDocumentationList | `superops_itdocs_list` | LIVE-CONFIRMED (UDF mapping); 0.1.12 Notes policy NEEDS REVALIDATION |
 | 35 | getItDocumentationCategories | `superops_itdocs_categories` | LIVE-CONFIRMED |
 | 36 | getKbItem | `superops_kb_get` | LIVE-CONFIRMED (article + collection) |
 | 37 | getKbItems | `superops_kb_list` | LIVE-CONFIRMED |
 | 38 | getScriptList | `superops_scripts_list` | LIVE-CONFIRMED |
 | 39 | getScriptListByType | `superops_scripts_by_type` | LIVE-CONFIRMED |
-| 40 | getTask | `superops_tasks_get` | IMPLEMENTED / NEEDS REVALIDATION (shared fragment; list should now yield `taskId`) |
-| 41 | getTaskList | `superops_tasks_list` | IMPLEMENTED / NEEDS REVALIDATION (0.1.11 leaf JSON associations; omits `module` enum) |
+| 40 | getTask | `superops_tasks_get` | LIVE-CONFIRMED |
+| 41 | getTaskList | `superops_tasks_list` | LIVE-CONFIRMED |
 | 42 | getWorkStatusList | `superops_work_statuses` | LIVE-CONFIRMED |
 | 43 | getWorklogEntries | `superops_worklogs_list` | LIVE-CONFIRMED |
 | 44 | getHolidayList | `superops_org_catalog` kind=`holiday` | LIVE-CONFIRMED |
@@ -137,8 +137,10 @@ All `create*` / `update*` / `delete*` / `resolveAlerts` / `runScriptOnAsset` / r
 - `lookup_failed` — opaque get/query failure. Never rewritten to `not_found`.
 - `not_found` — only after a successful query that returns no record.
 
-## IT documentation secrets (0.1.11)
+## IT documentation secrets (0.1.12)
 
-Default MCP reads redact PASSWORD / SECURE_TEXT and product/license/activation-key values. List and exact-get load `getItDocumentationCategories` and apply that category's custom-field definitions (`columnName` / `label` / `fieldType`) to document UDF maps such as `udf6text`. A field labeled Key/Serial, Product Key, License Key, or Activation Key is redacted even when the value is non-canonical and the GraphQL key is opaque. Hardware/asset `Serial Number` and ordinary `serialNumber` stay visible unless the surrounding field/category semantics establish software-license context. Column names such as `udf6text` or `serial` are never globally redacted. Redaction metadata records presence without the secret. Secrets are not written to audit logs.
+Default MCP reads redact PASSWORD / SECURE_TEXT and product/license/activation-key values. List and exact-get load `getItDocumentationCategories` and apply that category's custom-field definitions (`columnName` / `label` / `fieldType`) to document UDF maps such as `udf6text`. A field labeled Key/Serial, Product Key, License Key, or Activation Key is redacted even when the value is non-canonical and the GraphQL key is opaque.
+
+In an established Product Key / software-license category, freeform Notes / Description / Paragraph / Details fields redact credential-like substrings (canonical 5×5 and hyphenated multi-group keys) and keep surrounding text when that is enough. If remaining text still looks credential-like, the whole freeform field is redacted. Ordinary notes outside that semantic context stay visible. Hardware/asset `Serial Number` and ordinary `serialNumber` stay visible unless the surrounding field/category semantics establish software-license context. Column names such as `udf6text` or `serial` are never globally redacted. Redaction metadata records presence without the secret. Secrets are not written to audit logs.
 
 A future **human-authorized, per-field** disclosure path is a **PLANNED SECURITY CAPABILITY**. Phase 1 does not implement it and does not expose `includeSecrets` or any AI-controlled bypass.
