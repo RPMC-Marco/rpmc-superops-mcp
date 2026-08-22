@@ -1,24 +1,36 @@
 # Write capabilities
 
-Phase 1 does **not** register write tools. `tools/list` is generated from `src/capabilities.ts`.
-Each capability has `operationKind` (`query` / `mutation` / `local`) in addition to risk `classification`. Mutation-kind rows are never registered, even if someone later labels them `read`.
-If a row here says `registered: no` and the code still exposes it, that is a bug.
+Phase 2 registers purpose-built SuperOps write tools. `tools/list` is generated from `src/capabilities.ts`.
+Each capability has `operationKind` (`query` / `mutation` / `local`) in addition to risk `classification`.
+`superops_custom_mutation` and hard-delete/admin mutations are never registered.
 
-Emergency disable for the whole MCP HTTP listener: stop the container, or unset `MCP_AUTH_TOKEN` (process refuses to start in HTTP mode). SuperOps token remaining in the container env cannot be used by MCP callers.
+Emergency disable for writes: set `MCP_DISABLE_WRITES=true` (or `ENABLE_WRITE_TOOLS=false`) and restart. That omits write tools from the registry; Phase 1 reads remain. Emergency disable for the whole MCP HTTP listener: stop the container, or unset `MCP_AUTH_TOKEN` (process refuses to start in HTTP mode). SuperOps token remaining in the container env cannot be used by MCP callers.
 
-| Operation | SuperOps | Class | Risk | Blast radius | Reversible | Approval | Phase 1 registered | Enable later | Emergency disable |
-|---|---|---|---|---|---|---|---|---|---|
-| create ticket | `createTicket` | write_visible | medium | new ticket | close/update | preview/confirm | no | `ENABLE_WRITE_TOOLS` + allowlist | omit from registry |
-| update ticket | `updateTicket` | write_visible | medium | one ticket | sometimes | preview/confirm | no | allowlist | omit from registry |
-| create note | `createTicketNote` | write_low (PRIVATE) / write_visible (PUBLIC) | medium | one ticket | no | preview/confirm | no | allowlist | omit from registry |
-| create conversation | `createTicketConversation` | write_visible | high if `sendMail=true` | customer-visible | no | informed approval | no | allowlist | omit from registry |
-| create worklog | `createWorklogEntries` | write_low | low-medium | time records | delete if API allows | preview/confirm | no | allowlist | omit from registry |
-| resolve alerts | `resolveAlerts` | disruptive | high | monitoring visibility | no | informed approval | no | allowlist | omit from registry |
-| run script | `runScriptOnAsset` | disruptive | high | endpoint | no | informed approval + script allowlist | no | never generic execute | omit from registry |
-| soft delete ticket/asset/client | `softDelete*` | destructive | critical | records | SuperOps recycle? unknown | never auto | no | default never | omit from registry |
-| custom mutation | arbitrary GraphQL | destructive | critical | tenant | no | never | no | never in production | omit from registry |
-| custom query | arbitrary GraphQL | read (over-broad) | high | tenant data | n/a | n/a | no | not Phase 1 | omit from registry |
+Human confirmation for **disruptive** and **destructive** actions uses MCP elicitation (`inputRequired` / `elicitation/create`). It is **not** a tool argument such as `confirmed=true`. The operator must accept a scoped form that names the exact action and type the target identifier. The challenge is HMAC-signed from existing process credentials (no new long-lived secret). A model cannot downgrade consequence classification.
 
-Production enablement (future): change registry flags in config, restart, confirm `tools/list`, run live **write** tests only after RPMC approval. Rollback: revert flags and restart.
+The full inventory is in [PHASE2-WRITE-INVENTORY.md](PHASE2-WRITE-INVENTORY.md). Live mutation validation has not been performed; see [PHASE2-LIVE-VALIDATION.md](PHASE2-LIVE-VALIDATION.md).
 
-Fill test procedures when a write is actually implemented.
+| Operation | SuperOps | Class | Authorization | Phase 2 registered |
+|---|---|---|---|---|
+| create ticket | `createTicket` | write_visible | none when explicitly requested | yes |
+| update ticket | `updateTicket` | write_visible | none when explicitly requested | yes |
+| create note | `createNote` | write_low PRIVATE / write_visible PUBLIC | none when explicitly requested | yes |
+| create conversation | `createTicketConversation` | write_visible | none when explicitly requested | yes |
+| create worklog | `createWorklogEntries` | write_low | none when explicitly requested | yes |
+| update worklog | `updateWorklogEntry` | write_low | none when explicitly requested | yes |
+| create alert | `createAlert` | write_visible | none when explicitly requested | yes |
+| resolve alerts | `resolveAlerts` | disruptive | MCP elicitation always | yes |
+| update client user | `updateClientUser` | write_visible | none when explicitly requested | yes |
+| update user association | `updateClientUserAssociations` | write_visible | none when explicitly requested | yes |
+| update asset | `updateAsset` | write_visible | none when explicitly requested | yes |
+| create task | `createTask` | write_low | none when explicitly requested | yes |
+| create/update IT doc | `createItDocumentation` / `updateItDocumentation` | write_low | secret fields fail closed | yes |
+| create KB article | `createKbArticle` | write_low or write_visible | none when explicitly requested | yes |
+| create/update KB collection | `createKbCollection` / `updateKbCollection` | write_low | none when explicitly requested | yes |
+| run script | `runScriptOnAsset` | classified from metadata; unknown → disruptive | elicitation when disruptive/destructive | yes |
+| update KB article body | `updateKbArticle` | — | — | **DEFERRED / DEPENDENCY BLOCKED** |
+| merge tickets | none public | — | — | **UNSUPPORTED BY PUBLIC API** |
+| associate asset on existing ticket | not on `updateTicket` | — | — | **UNSUPPORTED BY PUBLIC API** |
+| update task | none public | — | — | **UNSUPPORTED BY PUBLIC API** |
+| custom mutation | arbitrary GraphQL | destructive | never | **never** |
+| hard delete / admin | `softDelete*` / billing / catalog admin | destructive | never | **EXCLUDED BY SAFETY POLICY** |

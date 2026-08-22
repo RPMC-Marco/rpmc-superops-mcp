@@ -23,6 +23,8 @@ function config(overrides: Partial<AppConfig> = {}): AppConfig {
     maxReadRetries: 1,
     maxRetryDurationMs: 1000,
     logLevel: "info",
+    writesEnabled: true,
+    scriptConsequenceRaise: "",
     ...overrides,
   };
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolClassification } from "./audit.js";
 import { EXPANDED_CAPABILITIES } from "./capabilities-expanded.js";
+import { WRITE_CAPABILITIES } from "./capabilities-write.js";
 
 export type OperationKind = "query" | "mutation" | "local";
 
@@ -16,6 +17,7 @@ export interface Capability {
   classification: ToolClassification;
   operationKind: OperationKind;
   phase1Registered: boolean;
+  phase2Registered?: boolean;
   inputSchema: z.ZodObject<z.ZodRawShape>;
 }
 
@@ -287,79 +289,51 @@ export const CAPABILITIES: Capability[] = [
     inputSchema: emptyInput,
   },
   ...EXPANDED_CAPABILITIES,
-  {
-    name: "superops_tickets_create",
-    description: "Create a ticket. Not registered in Phase 1.",
-    classification: "write_visible",
-    operationKind: "mutation",
-    phase1Registered: false,
-    inputSchema: emptyInput,
-  },
-  {
-    name: "superops_tickets_update",
-    description: "Update a ticket. Not registered in Phase 1.",
-    classification: "write_visible",
-    operationKind: "mutation",
-    phase1Registered: false,
-    inputSchema: emptyInput,
-  },
-  {
-    name: "superops_tickets_add_note",
-    description: "Create a ticket note. Not registered in Phase 1.",
-    classification: "write_low",
-    operationKind: "mutation",
-    phase1Registered: false,
-    inputSchema: emptyInput,
-  },
-  {
-    name: "superops_tickets_add_conversation",
-    description: "Create a ticket conversation / public reply. Not registered in Phase 1.",
-    classification: "write_visible",
-    operationKind: "mutation",
-    phase1Registered: false,
-    inputSchema: emptyInput,
-  },
-  {
-    name: "superops_alerts_resolve",
-    description: "Resolve alerts. Not registered in Phase 1.",
-    classification: "disruptive",
-    operationKind: "mutation",
-    phase1Registered: false,
-    inputSchema: emptyInput,
-  },
-  {
-    name: "superops_scripts_execute",
-    description: "Run an RMM script on an asset. Not registered in Phase 1.",
-    classification: "disruptive",
-    operationKind: "mutation",
-    phase1Registered: false,
-    inputSchema: emptyInput,
-  },
+  ...WRITE_CAPABILITIES,
   {
     name: "superops_custom_mutation",
     description: "Arbitrary GraphQL mutation. Never registered.",
     classification: "destructive",
     operationKind: "mutation",
     phase1Registered: false,
+    phase2Registered: false,
     inputSchema: emptyInput,
   },
 ];
 
-export function registeredCapabilities(): Capability[] {
-  return CAPABILITIES.filter(
-    (capability) =>
-      capability.phase1Registered &&
-      capability.classification === "read" &&
-      capability.operationKind !== "mutation"
-  );
+export interface RegistryOptions {
+  writesEnabled?: boolean;
 }
 
-export function registeredToolNames(): string[] {
-  return registeredCapabilities().map((capability) => capability.name);
+export function registeredCapabilities(options: RegistryOptions = {}): Capability[] {
+  const writesEnabled = options.writesEnabled !== false;
+  return CAPABILITIES.filter((capability) => {
+    if (capability.name === "superops_custom_mutation") return false;
+    if (capability.operationKind === "mutation") return Boolean(capability.phase2Registered) && writesEnabled;
+    return capability.phase1Registered && capability.classification === "read";
+  });
+}
+
+export function registeredToolNames(options: RegistryOptions = {}): string[] {
+  return registeredCapabilities(options).map((capability) => capability.name);
+}
+
+export function registeredWriteNames(options: RegistryOptions = {}): string[] {
+  return registeredCapabilities(options)
+    .filter((capability) => capability.operationKind === "mutation")
+    .map((capability) => capability.name);
 }
 
 export function unregisteredWriteNames(): string[] {
   return CAPABILITIES.filter(
     (capability) => capability.classification !== "read" || capability.operationKind === "mutation"
-  ).map((capability) => capability.name);
+  )
+    .filter((capability) => !capability.phase2Registered)
+    .map((capability) => capability.name);
+}
+
+export function neverRegisteredWriteNames(): string[] {
+  return CAPABILITIES.filter((capability) => capability.operationKind === "mutation" && !capability.phase2Registered).map(
+    (capability) => capability.name
+  );
 }

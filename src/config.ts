@@ -34,6 +34,8 @@ export interface AppConfig {
   maxReadRetries: number;
   maxRetryDurationMs: number;
   logLevel: string;
+  writesEnabled: boolean;
+  scriptConsequenceRaise: string;
 }
 
 function requireCredential(name: string, value: string | undefined): string {
@@ -50,6 +52,22 @@ function parseRegion(value: string | undefined): SuperOpsRegion {
     throw new Error("SUPEROPS_REGION must be us or eu");
   }
   return cleaned;
+}
+
+function parseBooleanFlag(value: string | undefined): boolean | undefined {
+  if (value === undefined || value.trim() === "") return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  throw new Error("boolean environment flag must be true or false");
+}
+
+function parseWritesEnabled(env: Record<string, string | undefined>): boolean {
+  const disable = parseBooleanFlag(env.MCP_DISABLE_WRITES);
+  if (disable === true) return false;
+  const enable = parseBooleanFlag(env.ENABLE_WRITE_TOOLS);
+  if (enable === false) return false;
+  return true;
 }
 
 function parsePositiveInt(name: string, value: string | undefined, fallback: number): number {
@@ -100,5 +118,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       20_000
     ),
     logLevel: cleanCredential(env.LOG_LEVEL) ?? "info",
+    writesEnabled: parseWritesEnabled(env),
+    scriptConsequenceRaise: cleanCredential(env.SCRIPT_CONSEQUENCE_RAISE) ?? "",
   };
 }

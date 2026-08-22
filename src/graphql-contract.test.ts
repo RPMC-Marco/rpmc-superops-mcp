@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ALL_QUERY_DOCUMENTS, GET_ALERTS_FOR_ASSET, GET_TECHNICIAN_LIST, GET_TICKET, GET_TICKET_LIST, GET_UNMONITORED_ASSET_LIST } from "./superops/queries.js";
 import { EXPANDED_QUERY_DOCUMENTS, GET_OFFERED_ITEMS, GET_SERVICE_ITEM_LIST, GET_TASK_LIST, OBJECT_TYPED_QUERY_DOCUMENTS } from "./superops/queries-expanded.js";
+import { ALL_MUTATION_DOCUMENTS } from "./superops/mutations.js";
 
 const NESTED_ASSOCIATION = /\b(client|site|requester|technician|techGroup|sla|asset)\s*\{/;
 
@@ -144,5 +145,19 @@ describe("graphql contracts", () => {
       expect(blob, name).toContain(name);
     }
     expect(required).toHaveLength(44);
+  });
+
+  it("keeps official mutation documents leaf-selected and excludes hard deletes", () => {
+    const blob = ALL_MUTATION_DOCUMENTS.join("\n");
+    expect(ALL_MUTATION_DOCUMENTS.length).toBe(18);
+    for (const document of ALL_MUTATION_DOCUMENTS) {
+      expect(document, document.slice(0, 80)).toMatch(/\bmutation\b/);
+    }
+    expect(blob).not.toMatch(/hardDelete|softDelete|restoreClients|restoreTickets/);
+    expect(blob).not.toMatch(/updateKbArticle/);
+    expect(blob).toContain("createNote");
+    expect(blob).toContain("createTicket");
+    expect(blob).toContain("runScriptOnAsset");
+    expect(blob).toContain("createAlert");
   });
 });

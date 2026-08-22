@@ -75,7 +75,7 @@ export class SuperOpsClient {
   async query<T = unknown>(query: string, variables?: Record<string, unknown>): Promise<T> {
     const isWrite = classifyGraphQLRequest(query).operationType === "mutation";
     if (isWrite) {
-      throw new SuperOpsError("Mutations are disabled in the RPMC Phase 1 client");
+      throw new SuperOpsError("Mutations must use SuperOpsClient.mutate");
     }
 
     const maxAttempts = Math.max(1, this.options.maxReadRetries);
@@ -101,6 +101,17 @@ export class SuperOpsClient {
     }
 
     throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  }
+
+  /**
+   * Execute one official mutation. Never retries. Callers must use the write
+   * pipeline's idempotency layer instead of repeating an uncertain request.
+   */
+  async mutate<T = unknown>(mutation: string, variables?: Record<string, unknown>): Promise<T> {
+    if (classifyGraphQLRequest(mutation).operationType !== "mutation") {
+      throw new SuperOpsError("SuperOpsClient.mutate requires a mutation document");
+    }
+    return this.requestOnce<T>(mutation, variables);
   }
 
   private async requestOnce<T>(query: string, variables?: Record<string, unknown>): Promise<T> {

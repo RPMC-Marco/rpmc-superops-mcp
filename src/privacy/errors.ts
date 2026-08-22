@@ -7,7 +7,7 @@ import {
 } from "../superops/errors.js";
 import { sanitizeErrorText } from "./safe-output.js";
 
-const PHASE1_MUTATION_GUARD = "Mutations are disabled in the RPMC Phase 1 client";
+const MUTATION_GUARD = "Mutations must use SuperOpsClient.mutate";
 
 export function toClientSafeError(error: unknown): string {
   if (error instanceof SuperOpsTimeoutError) {
@@ -23,8 +23,8 @@ export function toClientSafeError(error: unknown): string {
     return "SuperOps returned an unexpected response";
   }
   if (error instanceof SuperOpsError) {
-    if (error.message === PHASE1_MUTATION_GUARD) {
-      return PHASE1_MUTATION_GUARD;
+    if (error.message === MUTATION_GUARD) {
+      return MUTATION_GUARD;
     }
     return "SuperOps request failed";
   }

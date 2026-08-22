@@ -54,7 +54,7 @@ The 44 newly approved reads were live-accounted in 0.1.8 and further confirmed i
 | Client-scoped alerts via `asset.client.name` | Alert type has no documented client filter |
 | Nested association GraphQL selections | `SubSelectionNotAllowed` / official JSON scalars |
 | `Ticket.description` | Not on official Ticket type |
-| Writes, scripts, resolve-alert | Phase 1 read-only; script *list* tools do not execute |
+| Writes, scripts, resolve-alert | Phase 2 purpose-built writes are registered separately; script *list* tools still do not execute |
 | Inferring unmonitored assets from `getAssetList` | Would be a tenant scan; official query is live-unsupported |
 | Deprecated Field replacements (`getStatusList`, `getPriorityList`, …) | SuperOps: use current Field APIs |
 | `getAssetPatchStatus` | Redundant with `getAsset.patchStatus` |

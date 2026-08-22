@@ -52,12 +52,15 @@ describe("config", () => {
 });
 
 describe("mcp server tools/list", () => {
-  it("lists only registered read tools", () => {
+  it("lists registered read and Phase 2 write tools, never generic mutation", () => {
     const names = listMcpTools().map((tool) => tool.name);
     expect(names.sort()).toEqual([...registeredToolNames()].sort());
+    expect(names).toContain("superops_tickets_create");
+    expect(names).toContain("investigate_ticket");
     for (const writeName of unregisteredWriteNames()) {
       expect(names).not.toContain(writeName);
     }
+    expect(names).not.toContain("superops_custom_mutation");
   });
 
   it("does not expose an unvalidated ticket status filter", () => {
@@ -95,7 +98,7 @@ describe("mcp server tools/list", () => {
 });
 
 describe("handlers", () => {
-  it("does not execute unknown write tools", async () => {
+  it("does not execute the never-registered generic mutation tool", async () => {
     const config = loadConfig(stdioEnv);
     const client = new SuperOpsClient(
       { apiToken: "t", subdomain: "d", region: "us" },
@@ -108,7 +111,7 @@ describe("handlers", () => {
         },
       }
     );
-    const result = await handleTool("superops_tickets_create", {}, client, config);
+    const result = await handleTool("superops_custom_mutation", {}, client, config);
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toMatch(/not registered|Unknown/i);
   });

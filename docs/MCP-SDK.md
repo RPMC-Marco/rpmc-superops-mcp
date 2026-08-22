@@ -66,6 +66,10 @@ Ports in the Host header are ignored. `/health` is not Host-validated so Docker 
 
 Do not treat Host validation as authentication.
 
+## Human confirmation (Phase 2)
+
+Disruptive and destructive writes return MCP `inputRequired` with an elicitation form (`confirm` + `typedTarget`). The SDK legacy shim serves pre-2026-07-28 clients via `elicitation/create`. Confirmation is **not** a tool argument. The challenge is HMAC-scoped to action, target, consequence, and parameter digest.
+
 ## Request lifecycle
 
 Each `/mcp` request creates a server + Streamable HTTP transport, handles the request, then closes both in `finally`. If `handleRequest` throws, the client receives `{ "error": "request failed" }` without stack traces or internal messages. `/health` remains unauthenticated and secret-free.

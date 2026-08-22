@@ -68,6 +68,14 @@ const ALLOWED_METADATA_KEYS = new Set([
   "alertFilter",
   "assetLookup",
   "candidateCount",
+  "targetType",
+  "targetIdPresent",
+  "authorizationRequired",
+  "authorizationResult",
+  "verificationResult",
+  "idempotentReplay",
+  "mutationName",
+  "writeOutcome",
 ]);
 
 export function sanitizeAuditText(value: string): string {

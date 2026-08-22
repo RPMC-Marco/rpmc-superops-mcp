@@ -18,24 +18,29 @@ describe("capability registry", () => {
     expect(new Set(registered).size).toBe(registered.length);
   });
 
-  it("does not register write, mutation, or script tools", () => {
+  it("registers Phase 2 purpose-built writes and never registers generic mutation", () => {
     const registered = new Set(registeredToolNames());
-    const writes = unregisteredWriteNames();
-    expect(writes.length).toBeGreaterThan(0);
-    for (const name of writes) {
-      expect(registered.has(name)).toBe(false);
-    }
+    expect(registered.has("superops_tickets_create")).toBe(true);
+    expect(registered.has("superops_tickets_update")).toBe(true);
+    expect(registered.has("superops_tickets_add_note")).toBe(true);
+    expect(registered.has("superops_tickets_add_conversation")).toBe(true);
+    expect(registered.has("superops_worklogs_create")).toBe(true);
+    expect(registered.has("superops_alerts_resolve")).toBe(true);
+    expect(registered.has("superops_scripts_execute")).toBe(true);
     expect(registered.has("superops_custom_mutation")).toBe(false);
-    expect(registered.has("superops_scripts_execute")).toBe(false);
-    expect(registered.has("superops_tickets_create")).toBe(false);
-    expect(registered.has("superops_tickets_update")).toBe(false);
-    expect(registered.has("superops_tickets_add_note")).toBe(false);
-    expect(registered.has("superops_alerts_resolve")).toBe(false);
+    expect(unregisteredWriteNames()).toContain("superops_custom_mutation");
   });
 
   it("never registers mutation-kind operations even if a read label were set", () => {
     const registered = new Set(registeredToolNames());
     expect(registered.has("superops_custom_mutation")).toBe(false);
     expect(unregisteredWriteNames()).toContain("superops_custom_mutation");
+  });
+
+  it("can omit writes when writesEnabled is false", () => {
+    const registered = new Set(registeredToolNames({ writesEnabled: false }));
+    expect(registered.has("superops_tickets_get")).toBe(true);
+    expect(registered.has("superops_tickets_create")).toBe(false);
+    expect(registered.has("superops_custom_mutation")).toBe(false);
   });
 });

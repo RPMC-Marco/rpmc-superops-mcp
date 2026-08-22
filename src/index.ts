@@ -5,12 +5,13 @@ import { loadConfig } from "./config.js";
 import { clientFromConfig } from "./superops/client.js";
 import { createMcpServer } from "./mcp/server.js";
 import { handleMcpHttpRequest } from "./http/mcp-http.js";
+import { PRODUCT_VERSION } from "./version.js";
 
 function startStdio(): void {
   const config = loadConfig();
   const client = clientFromConfig(config);
   serveStdio(() => createMcpServer(config, client));
-  console.error("rpmc-superops-mcp running on stdio (Phase 1 read-only)");
+  console.error(`rpmc-superops-mcp ${PRODUCT_VERSION} running on stdio`);
 }
 
 async function startHttp(): Promise<void> {
@@ -28,7 +29,9 @@ async function startHttp(): Promise<void> {
             JSON.stringify({
               status: "ok",
               product: "rpmc-superops-mcp",
-              readonly: true,
+              version: PRODUCT_VERSION,
+              readonly: !config.writesEnabled,
+              writesEnabled: config.writesEnabled,
               auth: "required",
             })
           );

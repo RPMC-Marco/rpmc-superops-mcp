@@ -346,6 +346,30 @@ export function redactSecretCustomFields(
   return redactRecordMap(customFields, licenseContext, resolved.fieldDefs);
 }
 
+/**
+ * Fail-closed write gate for IT-document custom fields.
+ * Unknown columns, secret field types, license-key labels, and credential-like
+ * values are refused. This is not a disclosure bypass.
+ */
+export function forbiddenItDocWriteReason(
+  columnName: string,
+  value: unknown,
+  def?: CategoryFieldDef,
+  categoryName?: string
+): string | undefined {
+  const fieldType = (def?.fieldType ?? "").toUpperCase();
+  const label = def?.label ?? columnName;
+  if (!def) return "Unknown IT-document field; writes require a category field definition";
+  if (SECRET_FIELD_TYPES.has(fieldType)) return "PASSWORD/SECURE_TEXT fields cannot be written";
+  if (shouldRedactByLabel(label, isLicenseContextText(categoryName, label))) {
+    return "Secret or license-key fields cannot be written";
+  }
+  if (typeof value === "string" && (PRODUCT_KEY.test(value) || GENERIC_SECRET_LABEL.test(value))) {
+    return "Credential-like values cannot be written to IT documentation";
+  }
+  return undefined;
+}
+
 export function applyItDocSecretPolicy(value: unknown, context: ItDocSecretContext = {}): unknown {
   if (Array.isArray(value)) return value.map((item) => applyItDocSecretPolicy(item, context));
   if (!isRecord(value)) return value;

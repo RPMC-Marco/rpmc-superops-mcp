@@ -40,11 +40,21 @@ describe("SuperOpsClient", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  it("does not retry mutations because mutations are disabled", async () => {
+  it("refuses mutations on query() and never retries mutate()", async () => {
     const fetchImpl = vi.fn();
     const client = new SuperOpsClient(creds, { ...options, fetchImpl: fetchImpl as unknown as typeof fetch });
-    await expect(client.query("mutation M { ping }")).rejects.toThrow(/Mutations are disabled/);
+    await expect(client.query("mutation M { ping }")).rejects.toThrow(/mutate/);
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("sends a mutation exactly once through mutate()", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ error: "slow down" }, { status: 429, headers: { "Retry-After": "0" } }))
+      .mockResolvedValueOnce(jsonResponse({ data: { ok: true } }));
+    const client = new SuperOpsClient(creds, { ...options, fetchImpl: fetchImpl as unknown as typeof fetch });
+    await expect(client.mutate("mutation M { ping }")).rejects.toBeInstanceOf(SuperOpsHttpError);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("times out using AbortController", async () => {

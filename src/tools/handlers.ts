@@ -1,5 +1,7 @@
 import { buildCommit } from "../build-info.js";
 import type { AppConfig } from "../config.js";
+import { PRODUCT_PHASE, PRODUCT_VERSION } from "../version.js";
+import { registeredToolNames, registeredWriteNames } from "../capabilities.js";
 import type { SuperOpsClient } from "../superops/client.js";
 import { clampPageSize } from "../superops/limiter.js";
 import { normalizeListPagination } from "../superops/pagination.js";
@@ -18,6 +20,9 @@ import { investigateTicket } from "../tickets/investigate-ticket.js";
 import { omitStructuredEmail } from "../investigate/common.js";
 import { handleExpandedRead } from "../reads/expanded.js";
 import type { ToolOutcome } from "../audit.js";
+import { handleWriteTool } from "../writes/operations.js";
+import { AuthorizationRequiredError, WriteValidationError } from "../writes/errors.js";
+import type { WriteMcpContext, WriteExecutionResult } from "../writes/types.js";
 
 export interface ToolResult {
   content: Array<{ type: "text"; text: string }>;
@@ -48,26 +53,69 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
+function writeAuditFromResult(result: WriteExecutionResult): ToolResult["audit"] {
+  if (result.outcome === "failed" && "code" in result && !("mutation" in result)) {
+    return {
+      outcome: "failed",
+      errorCode: result.code,
+      metadata: {
+        logicalOperations: result.logicalOperations,
+        targetType: result.target?.type,
+        targetIdPresent: Boolean(result.target?.id),
+        authorizationRequired: result.classification === "disruptive" || result.classification === "destructive",
+        upstreamFailureCategory: result.upstreamFailureCategory,
+      },
+    };
+  }
+  const success = result as Extract<WriteExecutionResult, { mutation: string }>;
+  return {
+    outcome: success.outcome,
+    metadata: {
+      logicalOperations: success.logicalOperations,
+      mutationName: success.mutation,
+      targetType: success.target.type,
+      targetIdPresent: Boolean(success.target.id),
+      authorizationRequired: success.authorization.required,
+      authorizationResult: success.authorization.result,
+      verificationResult: success.verification.result,
+      idempotentReplay: success.idempotentReplay === true,
+      writeOutcome: success.outcome,
+    },
+  };
+}
+
 export async function handleTool(
   name: string,
   args: Record<string, unknown>,
   client: SuperOpsClient,
-  config: AppConfig
+  config: AppConfig,
+  ctx?: WriteMcpContext
 ): Promise<ToolResult> {
   try {
     switch (name) {
-      case "rpmc_status":
+      case "rpmc_status": {
+        const writeNames = registeredWriteNames({ writesEnabled: config.writesEnabled });
         return jsonResult({
           product: "rpmc-superops-mcp",
-          version: "0.1.12",
-          phase: 1,
-          readonly: true,
-          writesRegistered: false,
+          version: PRODUCT_VERSION,
+          phase: PRODUCT_PHASE,
+          readonly: writeNames.length === 0,
+          writesRegistered: writeNames.length > 0,
+          writesEnabled: config.writesEnabled,
+          readToolCount: registeredToolNames({ writesEnabled: false }).length,
+          writeToolCount: writeNames.length,
+          writeTools: writeNames,
+          confirmation: {
+            mechanism: "mcp_elicitation",
+            requiredFor: ["disruptive", "destructive"],
+            modelControlledBypass: false,
+          },
           commit: buildCommit(),
           region: config.superopsRegion,
           subdomainConfigured: Boolean(config.superopsSubdomain),
           transport: config.transport,
         });
+      }
       case "superops_test_connection": {
         await client.query(Q.GET_CLIENT_LIST, { input: { page: 1, pageSize: 1 } });
         return jsonResult({ ok: true, region: config.superopsRegion });
@@ -221,12 +269,31 @@ export async function handleTool(
         return jsonResult(payload, investigationAuditFromResult(payload));
       }
       default: {
+        if (config.writesEnabled && registeredWriteNames({ writesEnabled: true }).includes(name)) {
+          try {
+            const written = await handleWriteTool(name, args, { client, config, ctx });
+            if (written.outcome === "failed" && "code" in written && !("mutation" in written)) {
+              return {
+                ...errorResult(written.message),
+                auditDetail: written.code,
+                audit: writeAuditFromResult(written),
+              };
+            }
+            return jsonResult(written, writeAuditFromResult(written));
+          } catch (error) {
+            if (error instanceof WriteValidationError) {
+              return { ...errorResult(error.message), auditDetail: error.code };
+            }
+            throw error;
+          }
+        }
         const expanded = await handleExpandedRead(name, args, client);
         if (expanded) return jsonResult(expanded, investigationAuditFromResult(expanded));
         return errorResult(`Unknown or unregistered tool: ${name}`);
       }
     }
   } catch (error) {
+    if (error instanceof AuthorizationRequiredError) throw error;
     const clientMessage = toClientSafeError(error);
     return {
       ...errorResult(clientMessage),

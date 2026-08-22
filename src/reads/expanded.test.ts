@@ -52,7 +52,7 @@ describe("expanded Phase 1 reads", () => {
     ];
     for (const name of names) expect(registered.has(name), name).toBe(true);
     for (const write of unregisteredWriteNames()) expect(registered.has(write)).toBe(false);
-    expect(registered.has("superops_scripts_execute")).toBe(false);
+    expect(registered.has("superops_custom_mutation")).toBe(false);
   });
 
   it("does not include script source or execute mutations in expansion documents", () => {

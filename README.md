@@ -4,7 +4,7 @@ Standalone SuperOps MCP server for RPM Computers (RPMC).
 
 This is **not** a fork of WYRE, Computask, or Servosity. Those projects are implementation donors and live-API references. See [docs/PROVENANCE.md](docs/PROVENANCE.md).
 
-Phase 1: authenticated, read-only, Docker on QNAP (LAN). The core official read surface is live-confirmed through 0.1.12. Write tools are not registered and do not appear in `tools/list`. Constrained search and investigation tools are documented in [docs/READ-SURFACE.md](docs/READ-SURFACE.md). Complete official `get*` accounting is in [docs/OFFICIAL-READ-INVENTORY.md](docs/OFFICIAL-READ-INVENTORY.md). Live tenant evidence is in [docs/LIVE-CONFIRMATION-MATRIX.md](docs/LIVE-CONFIRMATION-MATRIX.md). After a QNAP image with a new tool surface, fully reconnect the Cursor MCP client.
+Phase 2: authenticated Docker on QNAP (LAN). The Phase 1 official read surface remains intact. Purpose-built write tools are registered and governed by a shared write pipeline (resolution, consequence classification, MCP elicitation for disruptive/destructive actions, idempotency, post-write verification, sanitized audit). Live mutation validation has **not** been performed. Write inventory: [docs/PHASE2-WRITE-INVENTORY.md](docs/PHASE2-WRITE-INVENTORY.md). Live validation plan: [docs/PHASE2-LIVE-VALIDATION.md](docs/PHASE2-LIVE-VALIDATION.md). Constrained search and investigation tools: [docs/READ-SURFACE.md](docs/READ-SURFACE.md). Official `get*` accounting: [docs/OFFICIAL-READ-INVENTORY.md](docs/OFFICIAL-READ-INVENTORY.md). After a QNAP image with a new tool surface, fully reconnect the Cursor MCP client.
 
 ## Runtime
 

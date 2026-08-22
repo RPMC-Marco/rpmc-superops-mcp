@@ -20,7 +20,8 @@ Classification used in this repository:
 | `src/mcp/server.ts`, `src/index.ts` | WYRE `src/mcp-server.ts` / `src/index.ts` @ d3f900c | Design inspiration | Factory + per-request HTTP server ideas. RPMC added required Bearer MCP auth and does not accept SuperOps tokens from client headers. |
 | `src/config.ts` `cleanCredential` | WYRE `src/client.ts` @ d3f900c | Substantially adapted | Placeholder stripping. |
 | Docker | WYRE/Computask Dockerfiles | Design inspiration | Node 24, no GitHub Packages, non-root. RPMC wrote the Dockerfile. |
-| Capability registry, caller auth, Host/Origin policy, safe-output walk | RPMC | Independently implemented | Phase 1 does not register write or mutation-kind tools. |
+| Capability registry, caller auth, Host/Origin policy, safe-output walk | RPMC | Independently implemented | Phase 2 registers purpose-built writes; generic mutation remains never-registered. |
+| `src/writes/*`, `src/superops/mutations.ts` | RPMC | Independently implemented | Official SuperOps mutation documents + shared write pipeline. |
 | `src/tickets/investigate-ticket.ts`, `src/assets/investigate-asset.ts`, `src/clients/investigate-client.ts`, search tools, investigation audit | RPMC | Independently implemented | Read-only aggregators and constrained ListInfoInput filters from official MSP docs + Help Center. |
 
 Servosity/msp-skills was **not** copied. It informed live-API notes in `docs/SUPEROPS-API-NOTES.md`.

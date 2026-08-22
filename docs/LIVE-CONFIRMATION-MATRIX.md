@@ -146,3 +146,7 @@ Safe failure for unfiltered contract errors is now `query_failed`, not `unsuppor
 **LIVE-CONFIRMED:** live QNAP stderr audit privacy for this deploy window. Recent `mcp.tool_call` records were metadata-only (`toolName`, `argumentKeys`, `logicalOperations`, `outcome`/`success`). No customer content, UDF values, or secret-bearing configuration.
 
 ServiceItem and Task list→get were not retested; nothing in 0.1.12 changed those selections.
+
+## 0.2.0 Phase 2 engineering (not live-mutation confirmed)
+
+Source 0.2.0 registers 18 purpose-built write tools plus the existing 60 reads. Live SuperOps mutations were **not** performed during engineering. Controlled validation is `docs/PHASE2-LIVE-VALIDATION.md`. After deploy, verify `rpmc_status` (`phase=2`, `writesRegistered=true`, write count 18) and reconnect Cursor if the catalog is stale. Do not call write tools until the controlled live plan starts.

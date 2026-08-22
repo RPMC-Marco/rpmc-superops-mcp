@@ -118,7 +118,7 @@ Official KB article *body* is a separate SuperOps download API (`module=KB_ARTIC
 
 ## Official mutations (not reads)
 
-All `create*` / `update*` / `delete*` / `resolveAlerts` / `runScriptOnAsset` / restore / soft-delete operations are **PHASE 2 PARKED**. They are not registered. The SuperOps client still blocks mutations.
+Phase 2 purpose-built writes are registered and inventoried in [PHASE2-WRITE-INVENTORY.md](PHASE2-WRITE-INVENTORY.md). The SuperOps client still rejects mutations on `query()`; writes use `mutate()` once with no retry. Hard-delete, billing/catalog administration, and generic GraphQL mutation remain unregistered.
 
 ## Coverage arithmetic
 
