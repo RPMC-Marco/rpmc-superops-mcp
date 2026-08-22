@@ -46,7 +46,6 @@ Legend: **safe failure** is the MCP outcome when SuperOps rejects the candidate.
 |---|---|
 | displayId `includes` fallback | Keep only if operator `is` is rejected. Do not change the confirmed `is` path |
 | Natural duplicate hostName / client-name uniqueness | `ambiguous` on page-1 `hasMore` or multiple exact matches is implemented; not naturally exercised live |
-| Live QNAP stderr audit privacy | Audit **code** allowlists metadata (`outcome`/`success`, no customer content). Live container stderr was not independently inspected in 0.1.6 |
 
 ## 0.1.7 code corrections (need targeted QNAP revalidation)
 
@@ -134,10 +133,16 @@ Safe failure for unfiltered contract errors is now `query_failed`, not `unsuppor
 
 **PRIVACY FAILURE:** Product Key / software-license freeform Notes (`udf5para`) can contain a license/key-like value. Exact-get returned it. List often omits `udf5para`, but that is not a privacy guarantee. Key/Serial UDF itself was correctly redacted.
 
-## 0.1.12 targeted revalidation (do not mark LIVE-CONFIRMED from unit tests or development probes)
+## 0.1.12 targeted live result (QNAP 0.1.12 / `807636f`)
 
-| Query | Why revalidate | Success looks like |
-|---|---|---|
-| getOfferedItems | omit live-null `type` enum; keep leaf associations + billing/work identity | page of offered items with `itemId` |
-| IT-doc list + get Notes | license-context freeform substring / fail-closed | Notes secret absent; product/asset names kept |
-| ordinary hardware serial | must stay visible | asset `serialNumber` / hardware Serial Number preserved |
+`readonly=true`, `writesRegistered=false`, 60 read / 0 write. CI SUCCESS. Deployed image `rpmc-superops-mcp:0.1.12-807636f` (`58e1cf073d6b`). Registered MCP reconnected without a Cursor restart.
+
+**LIVE-CONFIRMED:** getOfferedItems (`superops_offered_items`) against populated RPMC data (page 1, `totalCount` 629). `type` omitted. Useful identity/billing/work remained: `itemId`, `billDate`, `status`, `serviceItem` id/name/quantityType, `client`, `site`, `workItem` (TICKET and PROJECT), `technician`, qty/price/amount, and ordinary notes.
+
+**LIVE-CONFIRMED:** IT-doc category semantics; Product Key list and exact-get; Key/Serial `udf6text` redacted on every Product Key list and get (`secret_field_label`); license-context Notes (`udf5para`) no longer expose the previously observed credential class. One exact-get fail-closed the whole Notes field (`license_freeform`); another kept surrounding text after substring redaction (`license_key_value`). Product/asset names remained visible. Password-category customFields stayed null.
+
+**LIVE-CONFIRMED:** ordinary hardware / asset `serialNumber` remains visible on `superops_assets_list`.
+
+**LIVE-CONFIRMED:** live QNAP stderr audit privacy for this deploy window. Recent `mcp.tool_call` records were metadata-only (`toolName`, `argumentKeys`, `logicalOperations`, `outcome`/`success`). No customer content, UDF values, or secret-bearing configuration.
+
+ServiceItem and Task list→get were not retested; nothing in 0.1.12 changed those selections.

@@ -2,7 +2,7 @@
 
 Official source: [SuperOps MSP GraphQL API](https://developer.superops.com/msp) and Help Center [Search, pagination, and sorting](https://support.superops.com/en/articles/6632220-search-pagination-and-sorting) (retrieved 2026-08-21). Community code is reference only.
 
-Live tenant evidence: **0.1.6** / **0.1.7** / **0.1.8** / **0.1.9** / **0.1.10** / **0.1.11** QNAP. Undeployed remaining OfferedItem / Notes corrections: **0.1.12**. See `docs/LIVE-CONFIRMATION-MATRIX.md` and `docs/OFFICIAL-READ-INVENTORY.md`. Phase 1 is not complete.
+Live tenant evidence: **0.1.6** / **0.1.7** / **0.1.8** / **0.1.9** / **0.1.10** / **0.1.11** / **0.1.12** QNAP. See `docs/LIVE-CONFIRMATION-MATRIX.md` and `docs/OFFICIAL-READ-INVENTORY.md`. Phase 1 core read surface is complete.
 
 ## A. Implemented and RPMC live-confirmed
 
@@ -19,12 +19,12 @@ Live tenant evidence: **0.1.6** / **0.1.7** / **0.1.8** / **0.1.9** / **0.1.10**
 - Sites: `getClientSiteList.clientId`, `getClientSite`, name `is`
 - `getAssetSummary`, `getAssetActivity`
 - Identity lookups: page 1 only. Search: one requested page. No tenant scans
+- Live QNAP stderr audit privacy (0.1.12): `mcp.tool_call` records are metadata-only; no customer content or secrets
 
 ## B. Implemented, still unconfirmed or live-unsupported
 
 - Ticket `displayId` `includes` fallback (keep only if `is` is rejected)
 - Natural duplicate hostName / client-name uniqueness (`ambiguous` is implemented, not naturally seen live)
-- Live container stderr audit inspection (code is allowlisted)
 - **Unsupported on this tenant:** `getAssetList` `lastCommunicatedTime` sort — not sent (SuperOps default order)
 - **Unsupported on this tenant:** `getUnMonitoredAssetList` — `unmonitored` returns `unsupported_filter` without calling SuperOps and without enumerating assets
 
@@ -40,7 +40,7 @@ Live tenant evidence: **0.1.6** / **0.1.7** / **0.1.8** / **0.1.9** / **0.1.10**
 
 See `docs/OFFICIAL-READ-INVENTORY.md`. Every official SuperOps `get*` query is IMPLEMENTED, EXCLUDED (with reason), or DEFERRED / SPECIAL-PURPOSE. There is no silent low-value bucket.
 
-The 44 newly approved reads were live-accounted in 0.1.8 and further confirmed in 0.1.9. 0.1.11 live-confirmed ServiceItem and Task list→get plus IT-doc UDF mapping. 0.1.12 omits OfferedItem `type` (live-null non-nullable enum) and redacts license-context freeform Notes. KB article body download remains a planned future addon. Human-authorized secret disclosure is a planned security capability, not implemented. Deprecated Field replacements are not used. `getUnMonitoredAssetList` is never invoked.
+The 44 newly approved reads were live-accounted in 0.1.8 and further confirmed in 0.1.9. 0.1.11 live-confirmed ServiceItem and Task list→get plus IT-doc UDF mapping. 0.1.12 live-confirmed getOfferedItems (omit live-null `type`) and license-context IT-doc Notes redaction. KB article body download remains a planned future addon. Human-authorized secret disclosure is a planned security capability, not implemented. Deprecated Field replacements are not used. `getUnMonitoredAssetList` is never invoked.
 
 ## E. Unsuitable / intentionally not implemented
 

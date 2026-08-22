@@ -7,7 +7,7 @@ This file accounts for **100% of official `get*` query operations** in that sche
 Status values:
 
 - **IMPLEMENTED / LIVE-CONFIRMED** — MCP tool exists; RPMC tenant confirmed
-- **IMPLEMENTED / NEEDS REVALIDATION** — MCP tool exists; 0.1.12 contract correction not yet live-tested
+- **IMPLEMENTED / NEEDS REVALIDATION** — MCP tool exists; a later contract correction is not yet live-tested
 - **IMPLEMENTED / NOT TESTABLE / NO DISCOVERABLE ID** — MCP tool exists; no tenant record/ID was available
 - **LIVE-CONTRACT-CONFIRMED / NO DATA** — contract accepted; tenant returned no rows
 - **LIVE-UNSUPPORTED** — RPMC tenant rejects the query after the official contract was honored
@@ -48,7 +48,7 @@ Official KB article *body* is a separate SuperOps download API (`module=KB_ARTIC
 
 ## Newly implemented (44)
 
-0.1.11 live-confirmed ServiceItem and Task list→get, plus IT-doc UDF mapping. 0.1.12 corrects remaining OfferedItem `type` serialization and license-context Notes. Do not mark 0.1.12 corrections LIVE-CONFIRMED from unit tests or development probes.
+0.1.12 live-confirmed getOfferedItems (omit live-null `type`) and license-context IT-doc Notes redaction on list and exact-get. ServiceItem and Task list→get remain live-confirmed from 0.1.11.
 
 | # | Query | MCP tool | Status after 0.1.8 live / 0.1.9 correction |
 |---|---|---|---|
@@ -71,7 +71,7 @@ Official KB article *body* is a separate SuperOps download API (`module=KB_ARTIC
 | 17 | getClientContract | `superops_contracts_get` | LIVE-CONFIRMED |
 | 18 | getClientContractList | `superops_contracts_list` | LIVE-CONFIRMED |
 | 19 | getSLAList | `superops_org_catalog` kind=`sla` | LIVE-CONFIRMED |
-| 20 | getOfferedItems | `superops_offered_items` | IMPLEMENTED / NEEDS REVALIDATION (0.1.12 omits live-null `type` enum) |
+| 20 | getOfferedItems | `superops_offered_items` | LIVE-CONFIRMED |
 | 21 | getServiceCatalogItem | `superops_catalog_get` | LIVE-CONFIRMED |
 | 22 | getServiceCatalogItemList | `superops_catalog_list` | LIVE-CONFIRMED |
 | 23 | getServiceCategoryList | `superops_catalog_categories` | LIVE-CONFIRMED |
@@ -84,8 +84,8 @@ Official KB article *body* is a separate SuperOps download API (`module=KB_ARTIC
 | 30 | getInvoice | `superops_invoices_get` | LIVE-CONFIRMED |
 | 31 | getInvoiceList | `superops_invoices_list` | LIVE-CONFIRMED |
 | 32 | getInvoiceItemList | `superops_invoice_items` | LIVE-CONFIRMED |
-| 33 | getItDocumentation | `superops_itdocs_get` | LIVE-CONFIRMED (UDF mapping); 0.1.12 Notes policy NEEDS REVALIDATION |
-| 34 | getItDocumentationList | `superops_itdocs_list` | LIVE-CONFIRMED (UDF mapping); 0.1.12 Notes policy NEEDS REVALIDATION |
+| 33 | getItDocumentation | `superops_itdocs_get` | LIVE-CONFIRMED (UDF mapping + license-context Notes) |
+| 34 | getItDocumentationList | `superops_itdocs_list` | LIVE-CONFIRMED (UDF mapping + license-context Notes) |
 | 35 | getItDocumentationCategories | `superops_itdocs_categories` | LIVE-CONFIRMED |
 | 36 | getKbItem | `superops_kb_get` | LIVE-CONFIRMED (article + collection) |
 | 37 | getKbItems | `superops_kb_list` | LIVE-CONFIRMED |
