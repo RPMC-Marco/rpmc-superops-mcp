@@ -11,6 +11,7 @@ import {
 } from "../privacy/custom-fields.js";
 import { WriteValidationError } from "./errors.js";
 import { executeWrite, exactlyOne, optionalRequestId, optionalString, requireString } from "./pipeline.js";
+import { CLOSED_REQUIRES_EXPLICIT_INSTRUCTION, looksLikeClosedStatus } from "./ticket-lifecycle.js";
 import {
   assetPreWriteSummary,
   loadAsset,
@@ -55,6 +56,12 @@ function verifyFields(
 function atLeastOne(args: Record<string, unknown>, keys: string[]): void {
   if (!keys.some((key) => args[key] != null && args[key] !== "")) {
     throw new WriteValidationError("malformed_input", `Provide at least one of ${keys.join(", ")}`);
+  }
+}
+
+function assertClosedLifecycle(status: string | undefined, lifecycle: string | undefined): void {
+  if (status && looksLikeClosedStatus(status) && lifecycle !== "close") {
+    throw new WriteValidationError("close_requires_explicit_instruction", CLOSED_REQUIRES_EXPLICIT_INSTRUCTION);
   }
 }
 
@@ -114,6 +121,7 @@ export async function handleWriteTool(
   const client = runtime.client;
   const operations: string[] = [];
   const requestId = optionalRequestId(args);
+  runtime.authorizationGrant = optionalString(args, "authorizationGrant");
 
   switch (name) {
     case "superops_tickets_create":
@@ -175,6 +183,7 @@ export async function handleWriteTool(
     }
     const subject = requireString(input, "subject");
     const status = requireString(input, "status");
+    assertClosedLifecycle(status, optionalString(input, "lifecycle"));
     const mutationInput: Record<string, unknown> = {
       subject,
       status,
@@ -254,6 +263,7 @@ export async function handleWriteTool(
     ]);
     const target = await resolveTicketTarget(client, requireString(input, "ticket"), ops);
     const current = await loadTicket(client, target.id, ops);
+    assertClosedLifecycle(optionalString(input, "status"), optionalString(input, "lifecycle"));
     const mutationInput: Record<string, unknown> = { ticketId: target.id };
     const expected: Record<string, unknown> = {};
     const subject = optionalString(input, "subject");
@@ -295,6 +305,12 @@ export async function handleWriteTool(
         classification: "write_visible",
         action: "updateTicket",
         target,
+        scopeContext: {
+          target,
+          ticketId: target.id,
+          ticketDisplayId: target.label,
+          clientAccountId: scalarId(asRecord(current.client).accountId),
+        },
         canonicalPayload: mutationInput,
         requestId: reqId,
         logicalOperations: ops,
@@ -573,9 +589,10 @@ export async function handleWriteTool(
       {
         toolName: name,
         mutationName: "resolveAlerts",
-        classification: "disruptive",
+        classification: "write_visible",
         action: "resolveAlerts",
         target,
+        scopeContext: { target, alertIds, assetId },
         canonicalPayload: { alertIds, assetId },
         requestId: reqId,
         impact: "Resolved alerts leave active monitoring. An unresolved incident can become invisible.",
@@ -754,6 +771,12 @@ export async function handleWriteTool(
         classification: "write_visible",
         action: "updateAsset",
         target,
+        scopeContext: {
+          target,
+          assetId: target.id,
+          clientAccountId: scalarId(asRecord(current.client).accountId),
+          siteId: scalarId(asRecord(current.site).id),
+        },
         canonicalPayload: mutationInput,
         requestId: reqId,
         logicalOperations: ops,
@@ -1061,8 +1084,14 @@ export async function handleWriteTool(
         toolName: name,
         mutationName: "runScriptOnAsset",
         classification: classified.classification,
+        classificationSource: classified.classifiedFrom,
         action: "runScriptOnAsset",
         target: { type: "asset", id: asset.id, label: hostName ?? asset.id },
+        scopeContext: {
+          target: { type: "asset", id: asset.id, label: hostName ?? asset.id },
+          assetId: asset.id,
+          clientAccountId: scalarId(asRecord(assetDetail.client).accountId),
+        },
         canonicalPayload: { scriptId, assetId: asset.id, arguments: scriptArgs, paramDigest: scriptParamDigest(scriptId, asset.id, scriptArgs) },
         requestId: reqId,
         impact:

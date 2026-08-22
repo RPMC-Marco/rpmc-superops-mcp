@@ -50,6 +50,10 @@ const DENIED_METADATA_KEYS = new Set([
   "token",
   "ip",
   "ipaddress",
+  "granttoken",
+  "authorizationgrant",
+  "requeststate",
+  "grant",
 ]);
 
 const ALLOWED_METADATA_KEYS = new Set([
@@ -76,6 +80,14 @@ const ALLOWED_METADATA_KEYS = new Set([
   "idempotentReplay",
   "mutationName",
   "writeOutcome",
+  "registeredClassification",
+  "effectiveClassification",
+  "authorizationProfile",
+  "authorizationSource",
+  "authorizationGrantPresent",
+  "scopeCheck",
+  "classifiedFrom",
+  "classificationSource",
 ]);
 
 export function sanitizeAuditText(value: string): string {
@@ -139,12 +151,18 @@ export function buildToolCallAudit(input: {
   investigation?: { outcome: ToolOutcome; errorCode?: string; metadata?: Record<string, unknown> };
 }): AuditEvent {
   const outcome: ToolOutcome = input.investigation?.outcome ?? (input.isError ? "failed" : "complete");
+  const effectiveFromMeta = input.investigation?.metadata?.effectiveClassification;
+  const effectiveClassification =
+    typeof effectiveFromMeta === "string" ? (effectiveFromMeta as ToolClassification) : input.classification;
+  const registeredFromMeta = input.investigation?.metadata?.registeredClassification;
+  const registeredClassification =
+    typeof registeredFromMeta === "string" ? registeredFromMeta : input.classification;
   return {
     event: "mcp.tool_call",
     timestamp: new Date().toISOString(),
     requestId: input.requestId,
     toolName: input.toolName,
-    classification: input.classification,
+    classification: effectiveClassification,
     success: outcome === "complete",
     outcome,
     errorCode: input.investigation?.errorCode,
@@ -158,7 +176,9 @@ export function buildToolCallAudit(input: {
         : undefined,
     metadata: sanitizeAuditMetadata({
       operationKind: input.operationKind,
-      argumentKeys: input.argumentKeys.slice(0, 20),
+      argumentKeys: input.argumentKeys.filter((key) => key !== "authorizationGrant").slice(0, 20),
+      registeredClassification,
+      effectiveClassification,
       ...input.investigation?.metadata,
     }),
   };

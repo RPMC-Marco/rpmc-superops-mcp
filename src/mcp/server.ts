@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { inputRequired, McpServer } from "@modelcontextprotocol/server";
 import type { AppConfig } from "../config.js";
+import type { ToolClassification } from "../audit.js";
 import { buildToolCallAudit, writeAudit } from "../audit.js";
 import { registeredCapabilities } from "../capabilities.js";
 import { PRODUCT_VERSION } from "../version.js";
@@ -22,13 +23,14 @@ export function createMcpServer(config: AppConfig, client: SuperOpsClient): McpS
 
   for (const capability of registeredCapabilities({ writesEnabled: config.writesEnabled })) {
     const write = capability.operationKind === "mutation";
+    const authorizationTool = capability.phase2Registered === true && capability.operationKind === "local";
     server.registerTool(
       capability.name,
       {
         description: capability.description,
         inputSchema: capability.inputSchema,
         annotations: {
-          readOnlyHint: !write,
+          readOnlyHint: !write && capability.classification === "read",
           destructiveHint: capability.classification === "destructive" || capability.classification === "disruptive",
         },
       },
@@ -38,17 +40,26 @@ export function createMcpServer(config: AppConfig, client: SuperOpsClient): McpS
         const record = args && typeof args === "object" ? args : {};
         try {
           const result = await handleTool(capability.name, record, client, config, mcpContextFrom(ctx));
+          const effective = (result.audit?.metadata?.effectiveClassification as ToolClassification | undefined) ?? capability.classification;
           writeAudit(
             buildToolCallAudit({
               toolName: capability.name,
-              classification: capability.classification,
+              classification: effective,
               operationKind: capability.operationKind,
               durationMs: Date.now() - started,
               isError: Boolean(result.isError),
               argumentKeys: Object.keys(record).slice(0, 20),
               requestId,
               errorSummary: result.isError ? result.auditDetail ?? result.content[0]?.text : undefined,
-              investigation: result.audit,
+              investigation: {
+                outcome: result.audit?.outcome ?? (result.isError ? "failed" : "complete"),
+                errorCode: result.audit?.errorCode,
+                metadata: {
+                  registeredClassification: capability.classification,
+                  effectiveClassification: effective,
+                  ...result.audit?.metadata,
+                },
+              },
             })
           );
           return {
@@ -57,10 +68,11 @@ export function createMcpServer(config: AppConfig, client: SuperOpsClient): McpS
           };
         } catch (error) {
           if (error instanceof AuthorizationRequiredError) {
+            const effective = error.classification ?? capability.classification;
             writeAudit(
               buildToolCallAudit({
                 toolName: capability.name,
-                classification: capability.classification,
+                classification: effective,
                 operationKind: capability.operationKind,
                 durationMs: Date.now() - started,
                 isError: false,
@@ -69,7 +81,13 @@ export function createMcpServer(config: AppConfig, client: SuperOpsClient): McpS
                 investigation: {
                   outcome: "failed",
                   errorCode: "authorization_required",
-                  metadata: { authorizationRequired: true, authorizationResult: "pending" },
+                  metadata: {
+                    registeredClassification: capability.classification,
+                    effectiveClassification: effective,
+                    authorizationRequired: true,
+                    authorizationResult: "pending",
+                    authorizationGrantPresent: authorizationTool,
+                  },
                 },
               })
             );
@@ -77,14 +95,7 @@ export function createMcpServer(config: AppConfig, client: SuperOpsClient): McpS
               inputRequests: {
                 confirm: inputRequired.elicit({
                   message: error.elicit.message,
-                  requestedSchema: {
-                    type: "object",
-                    properties: {
-                      confirm: { type: "boolean", title: "Confirm this exact action" },
-                      typedTarget: { type: "string", title: "Type the exact target identifier to confirm" },
-                    },
-                    required: ["confirm", "typedTarget"],
-                  },
+                  requestedSchema: error.elicit.requestedSchema as never,
                 }),
               },
               requestState: error.elicit.requestState,

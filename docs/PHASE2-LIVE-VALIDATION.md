@@ -2,14 +2,16 @@
 
 **Do not run this plan during engineering.** Live mutations are a later, slower milestone.
 
-No live SuperOps writes were performed for 0.2.0 engineering.
+No live SuperOps writes were performed for 0.2.0 or 0.2.1 engineering.
+
+Authorization profiles (Rules A/B/C) are documented in [AUTHORIZATION-PROFILES.md](AUTHORIZATION-PROFILES.md). They are **not** live-confirmed until this plan is executed.
 
 ## Principles
 
 - Test by consequence and reversibility, not randomly.
 - Prefer: create TEST object → verify → modify → verify → undo/close → verify cleanup.
 - If cleanup fails: **STOP that mutation class**.
-- Use explicit `TEST` naming (`TEST MCP 0.2.0 …`) and a dedicated test client/site where possible.
+- Use explicit `TEST` naming (`TEST MCP 0.2.1 …`) and a dedicated test client/site where possible.
 - Never use production customer-visible content except on a designated TEST ticket.
 - One class at a time. Do not batch unrelated production writes.
 - After each write: confirm `rpmc_status` still reports the same version/SHA; confirm audit lines have no ticket bodies/secrets.
@@ -42,7 +44,7 @@ No live SuperOps writes were performed for 0.2.0 engineering.
 2. Optional: same create with `alertId` + `assetId` from a lab alert/asset.
 3. `superops_tickets_update` assign technician/group, then status/priority.
 4. `superops_tickets_add_conversation` with `sendMail=false`.
-5. Close with status + `resolutionCode` if the tenant requires it.
+5. Set status to **Resolved** (no extra confirmation). Do **not** Close unless the operator explicitly instructs close (`lifecycle=close`).
 
 **Verify:** `getTicket` and conversation list. Retry the same `requestId` and confirm no second ticket.  
 **Cleanup:** close the TEST ticket.  
@@ -72,10 +74,10 @@ Re-check create+update on the same TEST ticket. Confirm `requestId` replay retur
 
 1. `superops_alerts_create` on the lab asset (`TEST MCP` message).
 2. Verify via `getAlertsForAsset`.
-3. `superops_alerts_resolve` for that new alert id — **human must confirm** the elicitation form.
+3. `superops_alerts_resolve` for that new alert id — **must proceed without disruptive elicitation** (`write_visible`).
 4. Verify resolved or gone.
 
-**Stop if:** confirmation is skipped, or an unrelated alert is resolved.
+**Stop if:** an unrelated alert is resolved, or the tool unexpectedly demands disruptive confirmation.
 
 ### 7. Higher-consequence endpoint / script actions
 
@@ -99,12 +101,43 @@ Re-check create+update on the same TEST ticket. Confirm `requestId` replay retur
 No approved Phase 2 hard-delete tools. Do **not** test `softDelete*` / recycle / user deletion.  
 If a script classifies `destructive`, treat it as the last test on a disposable lab object only, with the full warning text, then stop the class after one success.
 
+### 10. Rules A ordinary writes
+
+Repeat a PRIVATE note + ticket status/priority change on the TEST ticket. Confirm no elicitation and audit `effectiveClassification` is `write_low` / `write_visible`.
+
+### 11. Rules A disruptive elicitation
+
+On a lab endpoint, run a classified-disruptive script with no grant. Confirm one genuine elicitation. Confirm `profile=C` / `confirmed=true` tool arguments do not bypass it.
+
+### 12. Rules B grant (lab only)
+
+1. Human: request a Rules B grant for the TEST ticket and the **lab** asset only (`rpmc_authorization_request_grant`).
+2. Confirm **one** elicitation describing profile, task, targets, max consequence, expiry.
+3. Execute one disruptive script under the grant.
+4. Execute a **second** disruptive script on the same asset under the same valid grant — no second prompt.
+5. Verify audit: `effectiveClassification=disruptive`, `authorizationProfile=maintenance_window`, `authorizationResult=preauthorized_by_scoped_grant`, no raw grant token.
+6. Attempt a classified-destructive script under the same Rules B grant — **must still stop/confirm**.
+
+### 13. Rules C on a disposable/lab target only
+
+Do **not** test Rules C against production customer infrastructure.
+
+1. Human grant for one disposable lab asset (Rules C).
+2. Disruptive action in scope — proceeds; audit still `disruptive`.
+3. Destructive action in scope on that lab object only — proceeds; audit still `destructive`.
+4. Attempt an out-of-scope destructive/disruptive action (different asset/host) — **must refuse** (`scope_violation`).
+
+### 14. Ticket Closed authority
+
+On the TEST ticket, attempt `status=Closed` without `lifecycle=close` — must refuse. After an explicit operator close instruction, `lifecycle=close` may close it (`write_visible`, not disruptive).
+
 ## Verification checklist (every group)
 
 - Mutation result `outcome` is `complete` only when post-write read agrees.
-- Audit line has tool, classification, target type, authorization result, verification result; no bodies/passwords/tokens.
+- Audit line has tool, **effective** classification, registered classification, target type, authorization profile/source/result, verification result; no bodies/passwords/tokens/grant tokens.
 - Phase 1 reads still work (`investigate_ticket` / `rpmc_status`).
 - No generic GraphQL mutation tool appears.
+- Rules B/C never rewrite classification.
 
 ## Global stop conditions
 

@@ -1,14 +1,19 @@
 import { createHash } from "node:crypto";
 import type { AppConfig } from "../config.js";
 import type { ToolClassification } from "../audit.js";
+import { WRITE_CAPABILITIES } from "../capabilities-write.js";
 import type { SuperOpsClient } from "../superops/client.js";
 import { SuperOpsNetworkError, SuperOpsTimeoutError } from "../superops/errors.js";
 import { asRecord, failureCode, upstreamFailureCategory } from "../investigate/common.js";
 import { toClientSafeError } from "../privacy/errors.js";
-import { authorizationRequired, requireHumanAuthorization } from "./authorization.js";
+import { resolveWriteAuthorization } from "./authorization.js";
 import { WriteValidationError } from "./errors.js";
+import type { GrantRegistry } from "./grants.js";
 import { defaultIdempotencyStore, type IdempotencyStore } from "./idempotency.js";
+import { loadTicket } from "./resolve.js";
 import type {
+  ActionScope,
+  AuthorizationRecord,
   PreWriteState,
   WriteExecutionResult,
   WriteFailure,
@@ -17,13 +22,17 @@ import type {
   WriteTarget,
   WriteVerification,
 } from "./types.js";
+import { defaultActionScope } from "./types.js";
 
 export interface WriteOperationPlan {
   toolName: string;
   mutationName: string;
   classification: ToolClassification;
+  registeredClassification?: ToolClassification;
+  classificationSource?: string;
   action: string;
   target: WriteTarget;
+  scopeContext?: ActionScope;
   canonicalPayload: Record<string, unknown>;
   requestId?: string;
   impact?: string;
@@ -39,10 +48,16 @@ export interface WriteRuntime {
   config: AppConfig;
   ctx?: WriteMcpContext;
   store?: IdempotencyStore;
+  authorizationGrant?: string;
+  grantRegistry?: GrantRegistry;
 }
 
 function paramDigest(payload: Record<string, unknown>): string {
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+function registeredClassificationOf(toolName: string, fallback: ToolClassification): ToolClassification {
+  return WRITE_CAPABILITIES.find((capability) => capability.name === toolName)?.classification ?? fallback;
 }
 
 function fail(input: Omit<WriteFailure, "outcome">): WriteFailure {
@@ -52,33 +67,42 @@ function fail(input: Omit<WriteFailure, "outcome">): WriteFailure {
 export async function executeWrite(plan: WriteOperationPlan, runtime: WriteRuntime): Promise<WriteExecutionResult> {
   const store = runtime.store ?? defaultIdempotencyStore;
   const fingerprint = store.fingerprint(plan.toolName, plan.target.id, plan.canonicalPayload);
+  const registeredClassification = plan.registeredClassification ?? registeredClassificationOf(plan.toolName, plan.classification);
+  const scope = plan.scopeContext ?? defaultActionScope(plan.target);
 
-  let authorization: WriteSuccess["authorization"] = { required: false, result: "not_required" };
-  if (authorizationRequired(plan.classification)) {
-    const decision = requireHumanAuthorization({
-      config: runtime.config,
-      ctx: runtime.ctx,
+  const authz = await resolveWriteAuthorization({
+    config: runtime.config,
+    ctx: runtime.ctx,
+    grantToken: runtime.authorizationGrant,
+    registry: runtime.grantRegistry,
+    classification: plan.classification,
+    action: plan.action,
+    toolName: plan.toolName,
+    target: plan.target,
+    scope,
+    paramDigest: paramDigest(plan.canonicalPayload),
+    impact: plan.impact ?? "This action may change SuperOps or endpoint state.",
+    reversibility: plan.reversibility ?? "Not automatically reversible.",
+    ticketStatus: async (ticketId: string) => {
+      const ticket = await loadTicket(runtime.client, ticketId, plan.logicalOperations);
+      return typeof ticket.status === "string" ? ticket.status : undefined;
+    },
+  });
+
+  if (!authz.ok) {
+    return fail({
+      code: authz.code,
+      message: authz.message,
       toolName: plan.toolName,
-      action: plan.action,
+      classification: plan.classification,
+      registeredClassification,
+      authorization: authz.record,
       target: plan.target,
-      consequence: plan.classification,
-      paramDigest: paramDigest(plan.canonicalPayload),
-      impact: plan.impact ?? "This action may interrupt users or hide monitoring state.",
-      reversibility: plan.reversibility ?? "Not automatically reversible.",
+      logicalOperations: plan.logicalOperations,
     });
-    if (decision.result === "declined") {
-      return fail({
-        code: "authorization_declined",
-        message: "Human confirmation was declined or did not match this action and target",
-        toolName: plan.toolName,
-        classification: plan.classification,
-        target: plan.target,
-        logicalOperations: plan.logicalOperations,
-      });
-    }
-    authorization = { required: true, result: decision.result };
   }
 
+  const authorization: AuthorizationRecord = authz.record;
   const began = store.begin(fingerprint, plan.requestId);
   if (!began.ok) {
     if (began.reason === "duplicate" && began.cached) {
@@ -95,6 +119,8 @@ export async function executeWrite(plan: WriteOperationPlan, runtime: WriteRunti
           : "An identical write is already in progress",
       toolName: plan.toolName,
       classification: plan.classification,
+      registeredClassification,
+      authorization,
       target: plan.target,
       logicalOperations: plan.logicalOperations,
     });
@@ -113,6 +139,8 @@ export async function executeWrite(plan: WriteOperationPlan, runtime: WriteRunti
             "The mutation request did not complete a verified response. Do not retry until current SuperOps state is checked.",
           toolName: plan.toolName,
           classification: plan.classification,
+          registeredClassification,
+          authorization,
           target: plan.target,
           logicalOperations: plan.logicalOperations,
           upstreamFailureCategory: upstreamFailureCategory(error),
@@ -124,6 +152,8 @@ export async function executeWrite(plan: WriteOperationPlan, runtime: WriteRunti
         message: toClientSafeError(error),
         toolName: plan.toolName,
         classification: plan.classification,
+        registeredClassification,
+        authorization,
         target: plan.target,
         logicalOperations: plan.logicalOperations,
         upstreamFailureCategory: upstreamFailureCategory(error),
@@ -145,12 +175,14 @@ export async function executeWrite(plan: WriteOperationPlan, runtime: WriteRunti
       mutation: plan.mutationName,
       toolName: plan.toolName,
       classification: plan.classification,
+      registeredClassification,
       authorization,
       target: { type: plan.target.type, id: plan.target.id },
       preWrite: plan.preWrite.captured ? plan.preWrite.summary : undefined,
       result: mutationResult,
       verification,
       logicalOperations: plan.logicalOperations,
+      classificationSource: plan.classificationSource,
     };
     store.complete(fingerprint, result);
     return result;
@@ -162,6 +194,8 @@ export async function executeWrite(plan: WriteOperationPlan, runtime: WriteRunti
         message: error.message,
         toolName: plan.toolName,
         classification: plan.classification,
+        registeredClassification,
+        authorization,
         target: plan.target,
         logicalOperations: plan.logicalOperations,
       });

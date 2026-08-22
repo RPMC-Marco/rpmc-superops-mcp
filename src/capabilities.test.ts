@@ -27,6 +27,9 @@ describe("capability registry", () => {
     expect(registered.has("superops_worklogs_create")).toBe(true);
     expect(registered.has("superops_alerts_resolve")).toBe(true);
     expect(registered.has("superops_scripts_execute")).toBe(true);
+    expect(registered.has("rpmc_authorization_request_grant")).toBe(true);
+    expect(registered.has("rpmc_authorization_inspect_grant")).toBe(true);
+    expect(registered.has("rpmc_authorization_revoke_grant")).toBe(true);
     expect(registered.has("superops_custom_mutation")).toBe(false);
     expect(unregisteredWriteNames()).toContain("superops_custom_mutation");
   });
@@ -41,6 +44,7 @@ describe("capability registry", () => {
     const registered = new Set(registeredToolNames({ writesEnabled: false }));
     expect(registered.has("superops_tickets_get")).toBe(true);
     expect(registered.has("superops_tickets_create")).toBe(false);
+    expect(registered.has("rpmc_authorization_request_grant")).toBe(false);
     expect(registered.has("superops_custom_mutation")).toBe(false);
   });
 });

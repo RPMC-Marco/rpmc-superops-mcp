@@ -1,7 +1,7 @@
 import { buildCommit } from "../build-info.js";
 import type { AppConfig } from "../config.js";
 import { PRODUCT_PHASE, PRODUCT_VERSION } from "../version.js";
-import { registeredToolNames, registeredWriteNames } from "../capabilities.js";
+import { registeredAuthorizationNames, registeredToolNames, registeredWriteNames } from "../capabilities.js";
 import type { SuperOpsClient } from "../superops/client.js";
 import { clampPageSize } from "../superops/limiter.js";
 import { normalizeListPagination } from "../superops/pagination.js";
@@ -22,6 +22,12 @@ import { handleExpandedRead } from "../reads/expanded.js";
 import type { ToolOutcome } from "../audit.js";
 import { handleWriteTool } from "../writes/operations.js";
 import { AuthorizationRequiredError, WriteValidationError } from "../writes/errors.js";
+import {
+  inspectAuthorizationGrant,
+  requestAuthorizationGrant,
+  revokeAuthorizationGrant,
+} from "../writes/grants.js";
+import { AUTHORIZATION_PROFILES } from "../writes/profiles.js";
 import type { WriteMcpContext, WriteExecutionResult } from "../writes/types.js";
 
 export interface ToolResult {
@@ -54,15 +60,26 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 function writeAuditFromResult(result: WriteExecutionResult): ToolResult["audit"] {
+  const auth = result.authorization;
+  const shared = {
+    logicalOperations: result.logicalOperations,
+    targetType: result.target?.type,
+    targetIdPresent: Boolean(result.target?.id),
+    registeredClassification: result.registeredClassification ?? result.classification,
+    effectiveClassification: result.classification,
+    authorizationRequired: auth?.required ?? false,
+    authorizationResult: auth?.result,
+    authorizationProfile: auth?.profile,
+    authorizationSource: auth?.source,
+    authorizationGrantPresent: auth?.grantPresent === true,
+    scopeCheck: auth?.scopeCheck,
+  };
   if (result.outcome === "failed" && "code" in result && !("mutation" in result)) {
     return {
       outcome: "failed",
       errorCode: result.code,
       metadata: {
-        logicalOperations: result.logicalOperations,
-        targetType: result.target?.type,
-        targetIdPresent: Boolean(result.target?.id),
-        authorizationRequired: result.classification === "disruptive" || result.classification === "destructive",
+        ...shared,
         upstreamFailureCategory: result.upstreamFailureCategory,
       },
     };
@@ -71,15 +88,12 @@ function writeAuditFromResult(result: WriteExecutionResult): ToolResult["audit"]
   return {
     outcome: success.outcome,
     metadata: {
-      logicalOperations: success.logicalOperations,
+      ...shared,
       mutationName: success.mutation,
-      targetType: success.target.type,
-      targetIdPresent: Boolean(success.target.id),
-      authorizationRequired: success.authorization.required,
-      authorizationResult: success.authorization.result,
       verificationResult: success.verification.result,
       idempotentReplay: success.idempotentReplay === true,
       writeOutcome: success.outcome,
+      classifiedFrom: success.classificationSource,
     },
   };
 }
@@ -95,6 +109,7 @@ export async function handleTool(
     switch (name) {
       case "rpmc_status": {
         const writeNames = registeredWriteNames({ writesEnabled: config.writesEnabled });
+        const authorizationNames = registeredAuthorizationNames({ writesEnabled: config.writesEnabled });
         return jsonResult({
           product: "rpmc-superops-mcp",
           version: PRODUCT_VERSION,
@@ -105,15 +120,82 @@ export async function handleTool(
           readToolCount: registeredToolNames({ writesEnabled: false }).length,
           writeToolCount: writeNames.length,
           writeTools: writeNames,
+          authorizationToolCount: authorizationNames.length,
+          authorizationTools: authorizationNames,
           confirmation: {
             mechanism: "mcp_elicitation",
             requiredFor: ["disruptive", "destructive"],
             modelControlledBypass: false,
+            defaultProfile: "standard_technician",
+          },
+          authorization: {
+            defaultProfile: "standard_technician",
+            modelCannotSelfSelectElevatedProfiles: true,
+            profiles: {
+              A: AUTHORIZATION_PROFILES.standard_technician,
+              B: AUTHORIZATION_PROFILES.maintenance_window,
+              C: AUTHORIZATION_PROFILES.authorized_build,
+            },
+            ticketLifecycle: {
+              resolved: "technician_complete_ready_for_review",
+              closed: "explicit_human_close_instruction_required",
+              closedIsWriteVisible: true,
+            },
           },
           commit: buildCommit(),
           region: config.superopsRegion,
           subdomainConfigured: Boolean(config.superopsSubdomain),
           transport: config.transport,
+        });
+      }
+      case "rpmc_authorization_request_grant": {
+        const issued = await requestAuthorizationGrant({ args, config, ctx, client });
+        return jsonResult(issued, {
+          outcome: "complete",
+          metadata: {
+            registeredClassification: "write_low",
+            effectiveClassification: "write_low",
+            authorizationProfile: issued.claims.profile,
+            authorizationSource: issued.authorizationSource,
+            authorizationGrantPresent: true,
+            authorizationResult: "accepted",
+            authorizationRequired: true,
+          },
+        });
+      }
+      case "rpmc_authorization_inspect_grant": {
+        const claims = inspectAuthorizationGrant(
+          typeof args.authorizationGrant === "string" ? args.authorizationGrant : undefined,
+          config
+        );
+        return jsonResult(
+          { claims },
+          {
+            outcome: "complete",
+            metadata: {
+              registeredClassification: "read",
+              effectiveClassification: "read",
+              authorizationProfile: claims.profile,
+              authorizationGrantPresent: true,
+              authorizationResult: "not_required",
+            },
+          }
+        );
+      }
+      case "rpmc_authorization_revoke_grant": {
+        const revoked = revokeAuthorizationGrant(
+          typeof args.authorizationGrant === "string" ? args.authorizationGrant : undefined,
+          config
+        );
+        return jsonResult(revoked, {
+          outcome: "complete",
+          metadata: {
+            registeredClassification: "write_low",
+            effectiveClassification: "write_low",
+            authorizationProfile: revoked.profile,
+            authorizationGrantPresent: true,
+            authorizationResult: "accepted",
+          },
         });
       }
       case "superops_test_connection": {
@@ -294,6 +376,9 @@ export async function handleTool(
     }
   } catch (error) {
     if (error instanceof AuthorizationRequiredError) throw error;
+    if (error instanceof WriteValidationError) {
+      return { ...errorResult(error.message), auditDetail: error.code };
+    }
     const clientMessage = toClientSafeError(error);
     return {
       ...errorResult(clientMessage),

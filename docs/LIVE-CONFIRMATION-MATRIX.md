@@ -149,4 +149,6 @@ ServiceItem and Task list→get were not retested; nothing in 0.1.12 changed tho
 
 ## 0.2.0 Phase 2 engineering (not live-mutation confirmed)
 
-Source 0.2.0 registers 18 purpose-built write tools plus the existing 60 reads. Live SuperOps mutations were **not** performed during engineering. Controlled validation is `docs/PHASE2-LIVE-VALIDATION.md`. After deploy, verify `rpmc_status` (`phase=2`, `writesRegistered=true`, write count 18) and reconnect Cursor if the catalog is stale. Do not call write tools until the controlled live plan starts.
+## 0.2.1 authorization hardening (not live-mutation confirmed)
+
+Source 0.2.1 keeps 18 purpose-built SuperOps write tools plus 60 reads, and adds 3 authorization-management tools (`rpmc_authorization_request_grant` / `_inspect_grant` / `_revoke_grant`). `superops_alerts_resolve` is `write_visible`. Scoped Rules A/B/C grants are implemented. Live SuperOps mutations were **not** performed. Rules B/C are **not** live-confirmed. Controlled validation is `docs/PHASE2-LIVE-VALIDATION.md`. After deploy, verify `rpmc_status` (`version=0.2.1`, `phase=2`, `writesRegistered=true`, write count 18, authorization tool count 3) and reconnect Cursor if the catalog is stale. Do not call write tools until the controlled live plan starts.

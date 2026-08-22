@@ -2,11 +2,7 @@ import { describe, expect, it } from "vitest";
 import { loadConfig } from "../config.js";
 import { SuperOpsClient } from "../superops/client.js";
 import { handleTool } from "../tools/handlers.js";
-import { AuthorizationRequiredError } from "./errors.js";
-import { IdempotencyStore } from "./idempotency.js";
 import { classifyScriptConsequence } from "./scripts.js";
-import { mintChallengeToken } from "./authorization.js";
-import { handleWriteTool } from "./operations.js";
 import { PRODUCT_VERSION } from "../version.js";
 import { listMcpTools } from "../mcp/server.js";
 
@@ -54,13 +50,15 @@ describe("Phase 2 write surface", () => {
       writesRegistered: boolean;
       writeToolCount: number;
       readToolCount: number;
+      authorizationToolCount: number;
       confirmation: { mechanism: string; modelControlledBypass: boolean };
     };
     expect(payload.version).toBe(PRODUCT_VERSION);
     expect(payload.phase).toBe(2);
     expect(payload.writesRegistered).toBe(true);
-    expect(payload.writeToolCount).toBeGreaterThan(0);
+    expect(payload.writeToolCount).toBe(18);
     expect(payload.readToolCount).toBe(60);
+    expect(payload.authorizationToolCount).toBe(3);
     expect(payload.confirmation.mechanism).toBe("mcp_elicitation");
     expect(payload.confirmation.modelControlledBypass).toBe(false);
   });
@@ -183,78 +181,51 @@ describe("Phase 2 write surface", () => {
     expect(ignoredLower.classification).toBe("disruptive");
   });
 
-  it("cannot execute resolveAlerts without human confirmation", async () => {
+  it("resolves alerts as write_visible without disruptive confirmation", async () => {
     const config = loadConfig(stdioEnv);
     let mutated = false;
     const client = clientFor((query) => {
-      if (query.includes("mutation")) {
+      if (query.includes("mutation resolveAlerts")) {
         mutated = true;
         return { resolveAlerts: true };
       }
-      return {};
-    });
-    await expect(handleTool("superops_alerts_resolve", { alertIds: ["a1"] }, client, config)).rejects.toBeInstanceOf(
-      AuthorizationRequiredError
-    );
-    expect(mutated).toBe(false);
-  });
-
-  it("rejects a model-controlled confirmation boolean and still requires elicitation", async () => {
-    const config = loadConfig(stdioEnv);
-    await expect(
-      handleTool("superops_alerts_resolve", { alertIds: ["a1"], confirmed: true, userApproved: true }, clientFor(() => ({})), config)
-    ).rejects.toBeInstanceOf(AuthorizationRequiredError);
-  });
-
-  it("executes resolveAlerts only after a scoped elicitation accept", async () => {
-    const config = loadConfig(stdioEnv);
-    const store = new IdempotencyStore();
-    const client = clientFor((query) => {
-      if (query.includes("mutation resolveAlerts")) return { resolveAlerts: true };
       if (query.includes("getAlertsForAsset")) {
         return { getAlertsForAsset: { alerts: [{ id: "a1", status: "Resolved" }], listInfo: { page: 1, hasMore: false } } };
       }
       return {};
     });
-    const token = mintChallengeToken(
-      {
-        v: 1,
-        action: "resolveAlerts",
-        targetType: "alert",
-        targetId: "a1",
-        consequence: "disruptive",
-        paramDigest: expect.getState().currentTestName ? undefined as never : "",
-        exp: Date.now() + 60_000,
-        nonce: "abc",
-      },
+    const result = await handleTool("superops_alerts_resolve", { alertIds: ["a1"], assetId: "asset1" }, client, config);
+    const payload = JSON.parse(result.content[0]?.text ?? "{}") as {
+      outcome: string;
+      classification: string;
+      authorization: { result: string; required: boolean };
+    };
+    expect(result.isError).toBeFalsy();
+    expect(mutated).toBe(true);
+    expect(payload.outcome).toBe("complete");
+    expect(payload.classification).toBe("write_visible");
+    expect(payload.authorization.required).toBe(false);
+    expect(payload.authorization.result).toBe("not_required");
+    expect(result.audit?.metadata?.effectiveClassification).toBe("write_visible");
+    expect(result.audit?.metadata?.registeredClassification).toBe("write_visible");
+  });
+
+  it("ignores a model-controlled confirmation boolean on resolveAlerts", async () => {
+    const config = loadConfig(stdioEnv);
+    const client = clientFor((query) => {
+      if (query.includes("mutation resolveAlerts")) return { resolveAlerts: true };
+      return {};
+    });
+    const result = await handleTool(
+      "superops_alerts_resolve",
+      { alertIds: ["a1"], confirmed: true, userApproved: true },
+      client,
       config
     );
-    // First compute the real digest by catching the challenge, then accept it.
-    try {
-      await handleWriteTool(
-        "superops_alerts_resolve",
-        { alertIds: ["a1"], assetId: "asset1", requestId: "req-alert-1" },
-        { client, config, store }
-      );
-      throw new Error("expected authorization");
-    } catch (error) {
-      if (!(error instanceof AuthorizationRequiredError)) throw error;
-      const accepted = await handleWriteTool(
-        "superops_alerts_resolve",
-        { alertIds: ["a1"], assetId: "asset1", requestId: "req-alert-1" },
-        {
-          client,
-          config,
-          store,
-          ctx: {
-            requestState: error.elicit.requestState,
-            inputResponses: { confirm: { action: "accept", content: { confirm: true, typedTarget: "a1" } } },
-          },
-        }
-      );
-      expect(accepted.outcome).toBe("complete");
-      expect(token).toBeTruthy();
-    }
+    const payload = JSON.parse(result.content[0]?.text ?? "{}") as { classification: string; outcome: string };
+    expect(result.isError).toBeFalsy();
+    expect(payload.classification).toBe("write_visible");
+    expect(payload.outcome).toBe("partial");
   });
 
   it("does not leak ticket bodies or secrets in write audit metadata", async () => {
@@ -264,11 +235,11 @@ describe("Phase 2 write surface", () => {
         return { getTicket: { ticketId: "t1", displayId: "220826-0001", subject: "password: hunter2", status: "Open" } };
       }
       if (query.includes("mutation updateTicket")) {
-        return { updateTicket: { ticketId: "t1", status: "Closed" } };
+        return { updateTicket: { ticketId: "t1", status: "Open" } };
       }
       throw new Error(query.slice(0, 80));
     });
-    const result = await handleTool("superops_tickets_update", { ticket: "t1", status: "Closed" }, client, config);
+    const result = await handleTool("superops_tickets_update", { ticket: "t1", status: "Open" }, client, config);
     expect(JSON.stringify(result.audit)).not.toContain("hunter2");
     expect(JSON.stringify(result.audit)).not.toContain("password");
     expect(result.audit?.metadata?.targetType).toBe("ticket");

@@ -3,6 +3,8 @@ import type { Capability } from "./capabilities.js";
 
 const requestId = z.string().min(8).optional();
 const id = z.string().min(1);
+const authorizationGrant = z.string().min(1).optional();
+const lifecycle = z.enum(["resolve", "close"]).optional();
 
 function writeTool(
   name: string,
@@ -17,14 +19,14 @@ function writeTool(
     operationKind: "mutation",
     phase1Registered: false,
     phase2Registered: true,
-    inputSchema,
+    inputSchema: inputSchema.extend({ authorizationGrant }),
   };
 }
 
 export const WRITE_CAPABILITIES: Capability[] = [
   writeTool(
     "superops_tickets_create",
-    "Create a SuperOps ticket. Identify the client with exactly one of accountId or clientName (exact unique match). Optional assetId/hostName associates the asset at create time via official addAssets. Optional alertId sets sourceReferenceId. Uses API token technician identity. Customer-visible. Does not merge tickets.",
+    "Create a SuperOps ticket. Identify the client with exactly one of accountId or clientName (exact unique match). Optional assetId/hostName associates the asset at create time via official addAssets. Optional alertId sets sourceReferenceId. Uses API token technician identity. Customer-visible. Does not merge tickets. Status Closed requires lifecycle=close and an explicit human close instruction; generic ticket handling may use Resolved.",
     "write_visible",
     z.object({
       subject: z.string().min(1),
@@ -45,12 +47,13 @@ export const WRITE_CAPABILITIES: Capability[] = [
       assetId: z.string().optional(),
       hostName: z.string().optional(),
       alertId: z.string().optional(),
+      lifecycle,
       requestId,
     })
   ),
   writeTool(
     "superops_tickets_update",
-    "Update an existing ticket identified by displayId (DDMMYY-NNNN) or ticketId. Purpose-built fields only: subject, status, priority, technician/group assignment, impact, urgency, category, cause, resolutionCode, site, requester. Ambiguous displayIds fail closed. Does not associate assets (unsupported on updateTicket). Does not merge tickets.",
+    "Update an existing ticket identified by displayId (DDMMYY-NNNN) or ticketId. Purpose-built fields only: subject, status, priority, technician/group assignment, impact, urgency, category, cause, resolutionCode, site, requester. Ambiguous displayIds fail closed. Does not associate assets (unsupported on updateTicket). Does not merge tickets. RPMC lifecycle: Resolved means the technician believes the issue is solved (authorized during delegated ticket handling). Closed means management review is complete and must not be set from generic 'handle this ticket' work. Closed is write_visible, not disruptive. Set lifecycle=close only when the human explicitly instructed to close the ticket.",
     "write_visible",
     z.object({
       ticket: z.string().min(1),
@@ -67,6 +70,7 @@ export const WRITE_CAPABILITIES: Capability[] = [
       resolutionCode: z.string().optional(),
       siteId: z.string().optional(),
       requesterUserId: z.string().optional(),
+      lifecycle,
       requestId,
     })
   ),
@@ -138,8 +142,8 @@ export const WRITE_CAPABILITIES: Capability[] = [
   ),
   writeTool(
     "superops_alerts_resolve",
-    "Resolve one or more SuperOps alerts via official resolveAlerts. Disruptive: always requires genuine human confirmation immediately before execution. Optional assetId is used only for post-write verification.",
-    "disruptive",
+    "Resolve one or more SuperOps alerts via official resolveAlerts. write_visible: changes monitoring/workflow state and does not interrupt the endpoint or service. Does not require disruptive confirmation. Optional assetId is used only for post-write verification.",
+    "write_visible",
     z.object({
       alertIds: z.array(z.string().min(1)).min(1).max(20),
       assetId: z.string().optional(),
@@ -269,7 +273,7 @@ export const WRITE_CAPABILITIES: Capability[] = [
   ),
   writeTool(
     "superops_scripts_execute",
-    "Run an existing SuperOps script on one asset via official runScriptOnAsset. Requires scriptId plus exactly one asset identity. Does not accept arbitrary script text. Consequence is classified from script metadata and cannot be lowered by the caller. Unknown scripts classify upward to disruptive and require human confirmation.",
+    "Run an existing SuperOps script on one asset via official runScriptOnAsset. Requires scriptId plus exactly one asset identity. Does not accept arbitrary script text. Consequence is classified from intended effect and target in script metadata, not from verbs such as delete/remove/clear. Unknown scripts classify upward to disruptive. The caller cannot lower classification. Optional authorizationGrant is an opaque human-created Rules B/C grant; it authorizes in-scope consequences and never rewrites classification.",
     "disruptive",
     z.object({
       scriptId: id,

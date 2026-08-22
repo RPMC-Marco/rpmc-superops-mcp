@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolClassification } from "./audit.js";
 import { EXPANDED_CAPABILITIES } from "./capabilities-expanded.js";
+import { AUTHORIZATION_CAPABILITIES } from "./capabilities-authorization.js";
 import { WRITE_CAPABILITIES } from "./capabilities-write.js";
 
 export type OperationKind = "query" | "mutation" | "local";
@@ -290,6 +291,7 @@ export const CAPABILITIES: Capability[] = [
   },
   ...EXPANDED_CAPABILITIES,
   ...WRITE_CAPABILITIES,
+  ...AUTHORIZATION_CAPABILITIES,
   {
     name: "superops_custom_mutation",
     description: "Arbitrary GraphQL mutation. Never registered.",
@@ -310,12 +312,19 @@ export function registeredCapabilities(options: RegistryOptions = {}): Capabilit
   return CAPABILITIES.filter((capability) => {
     if (capability.name === "superops_custom_mutation") return false;
     if (capability.operationKind === "mutation") return Boolean(capability.phase2Registered) && writesEnabled;
+    if (capability.phase2Registered) return writesEnabled;
     return capability.phase1Registered && capability.classification === "read";
   });
 }
 
 export function registeredToolNames(options: RegistryOptions = {}): string[] {
   return registeredCapabilities(options).map((capability) => capability.name);
+}
+
+export function registeredAuthorizationNames(options: RegistryOptions = {}): string[] {
+  return registeredCapabilities(options)
+    .filter((capability) => capability.phase2Registered && capability.operationKind === "local")
+    .map((capability) => capability.name);
 }
 
 export function registeredWriteNames(options: RegistryOptions = {}): string[] {
